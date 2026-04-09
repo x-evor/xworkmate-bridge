@@ -20,3 +20,15 @@ func TestTokenAuthHandlerServeHTTP(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 }
+
+func TestTokenAuthHandlerRejectsMissingBearer(t *testing.T) {
+	h := NewTokenAuthHandler(service.NewStaticTokenAuthService(""))
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}

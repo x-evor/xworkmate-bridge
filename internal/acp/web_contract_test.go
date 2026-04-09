@@ -45,6 +45,23 @@ func TestHandleRPCAllowsPreflightForConfiguredOrigin(t *testing.T) {
 	}
 }
 
+func TestHandleRPCRequiresBearerAuthorization(t *testing.T) {
+	server := NewServer()
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"http://127.0.0.1/acp/rpc",
+		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"acp.capabilities"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+
+	server.HandleRPC(recorder, request)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", recorder.Code)
+	}
+}
+
 func TestHandleRPCRejectsUnknownOrigin(t *testing.T) {
 	t.Setenv("ACP_ALLOWED_ORIGINS", "https://xworkmate.svc.plus")
 
@@ -57,6 +74,7 @@ func TestHandleRPCRejectsUnknownOrigin(t *testing.T) {
 	)
 	request.Header.Set("Origin", "https://evil.example.com")
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer test")
 
 	server.HandleRPC(recorder, request)
 
@@ -76,6 +94,7 @@ func TestHandleRPCMethodErrorUsesJSONEnvelope(t *testing.T) {
 	server := NewServer()
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/acp/rpc", nil)
+	request.Header.Set("Authorization", "Bearer test")
 
 	server.HandleRPC(recorder, request)
 
@@ -96,6 +115,7 @@ func TestHandleRPCCapabilitiesStillReturnsJSONResult(t *testing.T) {
 		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"acp.capabilities"}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer test")
 
 	server.HandleRPC(recorder, request)
 
@@ -107,5 +127,20 @@ func TestHandleRPCCapabilitiesStillReturnsJSONResult(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), `"providers"`) {
 		t.Fatalf("expected capabilities response, got %q", recorder.Body.String())
+	}
+}
+
+func TestHandleWebSocketRequiresBearerAuthorization(t *testing.T) {
+	t.Setenv("ACP_ALLOWED_ORIGINS", "https://xworkmate.svc.plus")
+
+	server := NewServer()
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/acp", nil)
+	request.Header.Set("Origin", "https://xworkmate.svc.plus")
+
+	server.HandleWebSocket(recorder, request)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", recorder.Code)
 	}
 }

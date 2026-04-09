@@ -18,6 +18,7 @@ import (
 	"xworkmate-bridge/internal/gatewayruntime"
 	"xworkmate-bridge/internal/mounts"
 	"xworkmate-bridge/internal/router"
+	"xworkmate-bridge/internal/service"
 	"xworkmate-bridge/internal/shared"
 )
 
@@ -49,6 +50,7 @@ type Server struct {
 	queues          map[string]chan task
 	gateway         *gatewayruntime.Manager
 	providerCatalog map[string]syncedProvider
+	authService     *service.StaticTokenAuthService
 }
 
 var wsUpgrader = websocket.Upgrader{
@@ -99,6 +101,7 @@ func NewServer() *Server {
 		queues:          make(map[string]chan task),
 		gateway:         gatewayruntime.NewManager(),
 		providerCatalog: make(map[string]syncedProvider),
+		authService:     service.NewStaticTokenAuthService(""),
 	}
 }
 
@@ -114,9 +117,19 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
+	if !s.authorized(r) {
+		s.writeJSONError(
+			w,
+			nil,
+			http.StatusUnauthorized,
+			-32001,
+			"missing bearer authorization",
+		)
+		return
+	}
 	upgrader := wsUpgrader
 	upgrader.CheckOrigin = func(req *http.Request) bool {
-		return s.originAllowed(req.Header.Get("Origin"))
+		return s.originAllowed(req.Header.Get("Origin")) && s.authorized(req)
 	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -141,6 +154,10 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			notify(shared.ErrorEnvelope(nil, -32700, err.Error()))
 			continue
 		}
+		request.Params = injectInboundAuthorizationHeader(
+			request.Params,
+			r.Header.Get("Authorization"),
+		)
 		response, rpcErr := s.handleRequest(request, notify)
 		if request.ID == nil {
 			continue
@@ -177,6 +194,16 @@ func (s *Server) HandleRPC(w http.ResponseWriter, r *http.Request) {
 			http.StatusForbidden,
 			-32003,
 			fmt.Sprintf("origin not allowed: %s", origin),
+		)
+		return
+	}
+	if !s.authorized(r) {
+		s.writeJSONError(
+			w,
+			nil,
+			http.StatusUnauthorized,
+			-32001,
+			"missing bearer authorization",
 		)
 		return
 	}

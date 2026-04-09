@@ -21,7 +21,7 @@ func (h *TokenAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := r.Header.Get("Authorization")
-	if !h.service.ValidateToken(token) {
+	if !h.service.ValidateAuthorizationHeader(token) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}

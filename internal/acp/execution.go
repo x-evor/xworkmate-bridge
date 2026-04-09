@@ -19,6 +19,7 @@ const (
 	externalProviderEndpointKey            = "externalProviderEndpoint"
 	externalProviderAuthorizationHeaderKey = "externalProviderAuthorizationHeader"
 	externalProviderLabelKey               = "externalProviderLabel"
+	inboundAuthorizationHeaderKey          = "bridgeAuthorizationHeader"
 )
 
 func buildResolvedExecutionParams(
@@ -70,6 +71,17 @@ func injectResolvedExternalProviderParams(
 	}
 	if label := strings.TrimSpace(provider.Label); label != "" {
 		params[externalProviderLabelKey] = label
+	}
+	return params
+}
+
+func injectInboundAuthorizationHeader(params map[string]any, authorization string) map[string]any {
+	if params == nil {
+		params = map[string]any{}
+	}
+	authorization = strings.TrimSpace(authorization)
+	if authorization != "" {
+		params[inboundAuthorizationHeaderKey] = authorization
 	}
 	return params
 }
@@ -169,6 +181,7 @@ func sanitizeExternalACPParams(method string, params map[string]any) map[string]
 	delete(next, externalProviderEndpointKey)
 	delete(next, externalProviderAuthorizationHeaderKey)
 	delete(next, externalProviderLabelKey)
+	delete(next, inboundAuthorizationHeaderKey)
 	// Gateway-only fields are irrelevant in ACP single-agent forwarding.
 	normalizedMethod := strings.TrimSpace(method)
 	if normalizedMethod == "session.start" || normalizedMethod == "session.message" {
@@ -187,9 +200,19 @@ func externalProviderFromParams(params map[string]any) (syncedProvider, bool) {
 		ProviderID:          strings.TrimSpace(shared.StringArg(params, "provider", "")),
 		Label:               strings.TrimSpace(shared.StringArg(params, externalProviderLabelKey, "")),
 		Endpoint:            endpoint,
-		AuthorizationHeader: strings.TrimSpace(shared.StringArg(params, externalProviderAuthorizationHeaderKey, "")),
+		AuthorizationHeader: fallbackAuthorizationHeader(
+			strings.TrimSpace(shared.StringArg(params, externalProviderAuthorizationHeaderKey, "")),
+			strings.TrimSpace(shared.StringArg(params, inboundAuthorizationHeaderKey, "")),
+		),
 		Enabled:             true,
 	}, true
+}
+
+func fallbackAuthorizationHeader(explicit, inbound string) string {
+	if strings.TrimSpace(explicit) != "" {
+		return strings.TrimSpace(explicit)
+	}
+	return strings.TrimSpace(inbound)
 }
 
 func requestExternalACP(

@@ -13,6 +13,19 @@ func NewStaticTokenAuthService(expectedToken string) *StaticTokenAuthService {
 }
 
 func (s *StaticTokenAuthService) ValidateToken(token string) bool {
-	token = strings.TrimSpace(token)
-	return token != "" && token == s.expectedToken
+	return s.ValidateAuthorizationHeader(token)
+}
+
+func (s *StaticTokenAuthService) ValidateAuthorizationHeader(header string) bool {
+	header = strings.TrimSpace(header)
+	if header == "" {
+		return false
+	}
+	if s.expectedToken == "" {
+		if !strings.HasPrefix(strings.ToLower(header), "bearer ") {
+			return false
+		}
+		return strings.TrimSpace(header[len("Bearer "):]) != ""
+	}
+	return header == s.expectedToken
 }
