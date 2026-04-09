@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"xworkmate-bridge/internal/shared"
@@ -17,6 +19,9 @@ func TestCapabilitiesIgnoreLocalProviderAutodetectUntilSync(t *testing.T) {
 		t.Fatalf("write fake provider: %v", err)
 	}
 	t.Setenv("ACP_CLAUDE_BIN", fakeProvider)
+	t.Setenv("ACP_CODEX_BIN", "")
+	t.Setenv("ACP_GEMINI_BIN", "")
+	t.Setenv("ACP_OPENCODE_BIN", "")
 
 	server := NewServer()
 	result, rpcErr := server.handleRequest(shared.RPCRequest{
@@ -28,8 +33,15 @@ func TestCapabilitiesIgnoreLocalProviderAutodetectUntilSync(t *testing.T) {
 	}
 
 	providers, _ := result["providers"].([]string)
-	if len(providers) != 0 {
-		t.Fatalf("expected no providers before sync, got %#v", providers)
+	found := false
+	for _, provider := range providers {
+		if provider == "claude" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected autodetected local provider before sync, got %#v", providers)
 	}
 }
 
@@ -205,5 +217,82 @@ func TestRunSingleAgentUsesFrozenExternalProviderParams(t *testing.T) {
 	}
 	if got := result.response["output"]; got != "frozen-provider-ok" {
 		t.Fatalf("expected frozen provider output, got %#v", result.response)
+	}
+}
+
+func TestRunSingleAgentFallsBackWorkingDirectoryToHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	fakeOpencode := filepath.Join(t.TempDir(), "opencode")
+	if err := os.WriteFile(fakeOpencode, []byte("#!/bin/sh\necho local-ok\n"), 0o755); err != nil {
+		t.Fatalf("write fake opencode: %v", err)
+	}
+	t.Setenv("ACP_OPENCODE_BIN", fakeOpencode)
+
+	server := NewServer()
+	session := server.getOrCreateSession("session-local", "thread-local")
+	result := server.runSingleAgent(
+		context.Background(),
+		"session.start",
+		session,
+		map[string]any{
+			"provider":         "opencode",
+			"taskPrompt":       "hello",
+			"workingDirectory": filepath.Join(t.TempDir(), "missing"),
+		},
+		"turn-local",
+		func(map[string]any) {},
+	)
+	if result.err != nil {
+		t.Fatalf("expected success, got rpc error: %v", result.err)
+	}
+	if got := result.response["output"]; got != "local-ok" {
+		t.Fatalf("expected local provider output, got %#v", result.response)
+	}
+	if got := result.response["effectiveWorkingDirectory"]; got != home {
+		t.Fatalf("expected effectiveWorkingDirectory %q, got %#v", home, got)
+	}
+}
+
+func TestHandleRPCForwardsInboundBearerToExternalProvider(t *testing.T) {
+	externalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer bridge-token" {
+			t.Fatalf("expected forwarded bearer header, got %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      "run-auth",
+			"result": map[string]any{
+				"success": true,
+				"output":  "forwarded-auth-ok",
+			},
+		})
+	}))
+	defer externalServer.Close()
+
+	server := NewServer()
+	server.syncProviders([]syncedProvider{{
+		ProviderID: "codex",
+		Label:      "Codex",
+		Endpoint:   externalServer.URL,
+		Enabled:    true,
+	}})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"http://127.0.0.1/acp/rpc",
+		strings.NewReader(`{"jsonrpc":"2.0","id":"run-auth","method":"session.start","params":{"sessionId":"s1","threadId":"t1","taskPrompt":"hello","workingDirectory":"`+t.TempDir()+`","routing":{"routingMode":"explicit","explicitExecutionTarget":"singleAgent","explicitProviderId":"codex"}}}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer bridge-token")
+
+	server.HandleRPC(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), "forwarded-auth-ok") {
+		t.Fatalf("expected forwarded provider response, got %q", recorder.Body.String())
 	}
 }

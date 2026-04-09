@@ -217,6 +217,10 @@ func (s *Server) HandleRPC(w http.ResponseWriter, r *http.Request) {
 		s.writeJSONError(w, nil, http.StatusBadRequest, -32700, err.Error())
 		return
 	}
+	request.Params = injectInboundAuthorizationHeader(
+		request.Params,
+		r.Header.Get("Authorization"),
+	)
 
 	accept := strings.ToLower(r.Header.Get("Accept"))
 	stream := strings.Contains(accept, "text/event-stream")
@@ -267,6 +271,13 @@ func (s *Server) HandleRPC(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(shared.ResultEnvelope(request.ID, response))
+}
+
+func (s *Server) authorized(r *http.Request) bool {
+	if s == nil || s.authService == nil {
+		return false
+	}
+	return s.authService.ValidateAuthorizationHeader(r.Header.Get("Authorization"))
 }
 
 func (s *Server) handleRequest(
@@ -689,6 +700,10 @@ func (s *Server) runSingleAgent(
 	workingDirectory := strings.TrimSpace(
 		shared.StringArg(params, "workingDirectory", ""),
 	)
+	workingDirectory, effectiveWorkingDirectory := shared.NormalizeProviderWorkingDirectory(
+		provider,
+		workingDirectory,
+	)
 	model := strings.TrimSpace(shared.StringArg(params, "model", ""))
 	prompt := strings.TrimSpace(shared.StringArg(params, "taskPrompt", ""))
 	prompt = shared.AugmentPromptWithAttachments(prompt, params)
@@ -714,6 +729,9 @@ func (s *Server) runSingleAgent(
 			}
 			if _, exists := result["turnId"]; !exists {
 				result["turnId"] = turnID
+			}
+			if _, exists := result["effectiveWorkingDirectory"]; !exists && effectiveWorkingDirectory != "" {
+				result["effectiveWorkingDirectory"] = effectiveWorkingDirectory
 			}
 			return taskResult{response: result}
 		}
@@ -756,6 +774,9 @@ func (s *Server) runSingleAgent(
 			}
 			if _, exists := result["turnId"]; !exists {
 				result["turnId"] = turnID
+			}
+			if _, exists := result["effectiveWorkingDirectory"]; !exists && effectiveWorkingDirectory != "" {
+				result["effectiveWorkingDirectory"] = effectiveWorkingDirectory
 			}
 			return taskResult{response: result}
 		}
@@ -827,11 +848,12 @@ func (s *Server) runSingleAgent(
 
 	return taskResult{
 		response: map[string]any{
-			"success":  true,
-			"output":   output,
-			"turnId":   turnID,
-			"mode":     "single-agent",
-			"provider": provider,
+			"success":                  true,
+			"output":                   output,
+			"turnId":                   turnID,
+			"mode":                     "single-agent",
+			"provider":                 provider,
+			"effectiveWorkingDirectory": effectiveWorkingDirectory,
 		},
 	}
 }

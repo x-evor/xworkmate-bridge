@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -82,6 +83,40 @@ func RunProviderCommand(
 		return "", fmt.Errorf("%s returned empty output", provider)
 	}
 	return output, nil
+}
+
+func NormalizeProviderWorkingDirectory(provider, requested string) (string, string) {
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		return "", ""
+	}
+	switch strings.TrimSpace(strings.ToLower(provider)) {
+	case "codex", "opencode":
+	default:
+		return requested, requested
+	}
+	if canAccessWorkingDirectory(requested) {
+		return requested, requested
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return requested, requested
+	}
+	home = strings.TrimSpace(home)
+	if home == "" {
+		return requested, requested
+	}
+	return home, home
+}
+
+func canAccessWorkingDirectory(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	cmd := exec.Command("pwd")
+	cmd.Dir = path
+	return cmd.Run() == nil
 }
 
 func ResolveProviderCommand(

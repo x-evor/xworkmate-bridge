@@ -3,6 +3,8 @@ package acp
 import (
 	"sort"
 	"strings"
+
+	"xworkmate-bridge/internal/shared"
 )
 
 type syncedProvider struct {
@@ -72,6 +74,9 @@ func (s *Server) availableProviders() []string {
 		providers[provider.ProviderID] = struct{}{}
 	}
 	s.mu.Unlock()
+	for _, providerID := range shared.DetectACPProviders() {
+		providers[providerID] = struct{}{}
+	}
 	ordered := make([]string, 0, len(providers))
 	for providerID := range providers {
 		ordered = append(ordered, providerID)
