@@ -269,7 +269,7 @@ XWORKMATE_GEMINI_ARGS=--experimental-acp
 XWORKMATE_GEMINI_INIT_PROTOCOL_VERSION=1
 ```
 
-The implemented first version exposes:
+The implemented adapter exposes:
 
 - `POST /acp/rpc`
 - `GET /acp` WebSocket ACP
@@ -284,14 +284,19 @@ Supported adapter methods:
 - `gemini.initialize`
 - `gemini.raw`
 
-`session.start` and `session.message` currently behave as a shim skeleton:
+`session.start` and `session.message` now use a compatibility layer by default:
 
-- the adapter always initializes Gemini ACP first
-- then it forwards to the configured upstream method
-- by default, the upstream method name is the same as the incoming bridge method
-- if Gemini returns an upstream error, the adapter converts that into a bridge-compatible `success: false` result payload instead of failing the HTTP transport
+- the adapter still initializes Gemini ACP first so `acp.capabilities` remains grounded in the real upstream ACP surface
+- if `GEMINI_ADAPTER_UPSTREAM_METHOD` is unset, session traffic runs through adapter-local prompt mode
+- the adapter keeps session-local history keyed by `sessionId`
+- `session.start` resets adapter-local history for that session
+- `session.message` replays prior user turns plus the new turn as one prompt to the Gemini CLI
+- the adapter returns a bridge-compatible single-agent payload with `output`, `provider`, `mode`, and `upstreamMethod: "prompt"`
+- `session.close` drops adapter-local state
 
-You can override the forwarded method name with:
+This default exists because the verified Gemini ACP upstream did not expose bridge-compatible `session.start` / `session.message` methods during testing.
+
+If Gemini ACP later gains a compatible conversation method, you can override the forwarded method name with:
 
 ```bash
 export GEMINI_ADAPTER_UPSTREAM_METHOD=your-discovered-gemini-method

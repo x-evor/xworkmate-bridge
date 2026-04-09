@@ -27,5 +27,11 @@ func (s *StaticTokenAuthService) ValidateAuthorizationHeader(header string) bool
 		}
 		return strings.TrimSpace(header[len("Bearer "):]) != ""
 	}
-	return header == s.expectedToken
+	if header == s.expectedToken {
+		return true
+	}
+	if !strings.HasPrefix(strings.ToLower(header), "bearer ") {
+		return false
+	}
+	return strings.TrimSpace(header[len("Bearer "):]) == s.expectedToken
 }

@@ -101,7 +101,7 @@ func NewServer() *Server {
 		queues:          make(map[string]chan task),
 		gateway:         gatewayruntime.NewManager(),
 		providerCatalog: make(map[string]syncedProvider),
-		authService:     service.NewStaticTokenAuthService(""),
+		authService:     service.NewStaticTokenAuthService(strings.TrimSpace(shared.EnvOrDefault("ACP_AUTH_TOKEN", ""))),
 	}
 }
 

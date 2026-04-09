@@ -1,6 +1,7 @@
 package geminiadapter
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -24,12 +25,15 @@ const (
 )
 
 type Server struct {
-	client          rpcClient
-	authService     *service.StaticTokenAuthService
-	providerID      string
-	providerLabel   string
-	allowedOrigins  []string
-	upstreamMethod  string
+	client         rpcClient
+	authService    *service.StaticTokenAuthService
+	providerID     string
+	providerLabel  string
+	allowedOrigins []string
+	upstreamMethod string
+	sessionRunner  func(context.Context, string, string, string) (string, error)
+	sessionsMu     sync.Mutex
+	sessions       map[string]*adapterSession
 }
 
 var adapterWSUpgrader = websocket.Upgrader{
@@ -38,6 +42,14 @@ var adapterWSUpgrader = websocket.Upgrader{
 	CheckOrigin: func(*http.Request) bool {
 		return true
 	},
+}
+
+type adapterSession struct {
+	history            []string
+	model              string
+	workingDirectory   string
+	lastOutput         string
+	lastUpstreamMethod string
 }
 
 func Serve(args []string) error {
@@ -98,6 +110,16 @@ func NewServer(client rpcClient) *Server {
 		providerLabel:  strings.TrimSpace(shared.EnvOrDefault("GEMINI_ADAPTER_PROVIDER_LABEL", defaultLabel)),
 		allowedOrigins: parseAllowedOrigins(strings.TrimSpace(shared.EnvOrDefault("GEMINI_ADAPTER_ALLOWED_ORIGINS", "https://xworkmate.svc.plus,http://localhost:*,http://127.0.0.1:*"))),
 		upstreamMethod: strings.TrimSpace(shared.EnvOrDefault("GEMINI_ADAPTER_UPSTREAM_METHOD", "")),
+		sessionRunner: func(ctx context.Context, model, prompt, workingDirectory string) (string, error) {
+			return shared.RunProviderCommand(
+				ctx,
+				defaultProviderID,
+				model,
+				prompt,
+				workingDirectory,
+			)
+		},
+		sessions: make(map[string]*adapterSession),
 	}
 }
 
@@ -188,7 +210,8 @@ func (s *Server) handleRequest(request shared.RPCRequest) map[string]any {
 	case "session.cancel":
 		return map[string]any{"accepted": true, "cancelled": false}
 	case "session.close":
-		return map[string]any{"accepted": true, "closed": true}
+		sessionID := strings.TrimSpace(shared.StringArg(request.Params, "sessionId", ""))
+		return map[string]any{"accepted": true, "closed": s.closeSession(sessionID)}
 	case "gemini.initialize":
 		return s.handleInitialize()
 	case "gemini.raw":
@@ -275,9 +298,13 @@ func (s *Server) handleSessionRequest(method string, params map[string]any) map[
 		}
 	}
 	upstreamMethod := s.upstreamMethod
-	if upstreamMethod == "" {
-		upstreamMethod = strings.TrimSpace(method)
+	if upstreamMethod != "" {
+		return s.handleConfiguredUpstreamSessionRequest(upstreamMethod, params)
 	}
+	return s.handleCompatSessionRequest(method, params)
+}
+
+func (s *Server) handleConfiguredUpstreamSessionRequest(upstreamMethod string, params map[string]any) map[string]any {
 	response, err := s.client.Call(upstreamMethod, params)
 	if err != nil {
 		return map[string]any{
@@ -315,6 +342,130 @@ func (s *Server) handleSessionRequest(method string, params map[string]any) map[
 		"upstreamMethod": upstreamMethod,
 		"upstream":       response,
 	}
+}
+
+func (s *Server) handleCompatSessionRequest(method string, params map[string]any) map[string]any {
+	if s.sessionRunner == nil {
+		return map[string]any{
+			"success":  false,
+			"provider": s.providerID,
+			"mode":     "single-agent",
+			"error":    "gemini session runner is not configured",
+		}
+	}
+	sessionID := strings.TrimSpace(shared.StringArg(params, "sessionId", ""))
+	if sessionID == "" {
+		return map[string]any{
+			"success":  false,
+			"provider": s.providerID,
+			"mode":     "single-agent",
+			"error":    "sessionId is required",
+		}
+	}
+	state := s.getOrCreateSession(sessionID)
+	if method == "session.start" {
+		state = s.resetSession(sessionID)
+	}
+	taskPrompt := strings.TrimSpace(shared.StringArg(params, "taskPrompt", ""))
+	taskPrompt = shared.AugmentPromptWithAttachments(taskPrompt, params)
+	if taskPrompt == "" {
+		return map[string]any{
+			"success":  false,
+			"provider": s.providerID,
+			"mode":     "single-agent",
+			"error":    "taskPrompt is required",
+		}
+	}
+
+	model := strings.TrimSpace(shared.StringArg(params, "model", ""))
+	if model == "" {
+		model = state.model
+	}
+	workingDirectory := strings.TrimSpace(shared.StringArg(params, "workingDirectory", ""))
+	if workingDirectory == "" {
+		workingDirectory = state.workingDirectory
+	}
+
+	sessionsHistory := append([]string(nil), state.history...)
+	sessionsHistory = append(sessionsHistory, taskPrompt)
+	composedPrompt := shared.ComposeHistoryPrompt(sessionsHistory)
+	output, err := s.sessionRunner(context.Background(), model, composedPrompt, workingDirectory)
+	if err != nil {
+		return map[string]any{
+			"success":  false,
+			"provider": s.providerID,
+			"mode":     "single-agent",
+			"error":    err.Error(),
+		}
+	}
+
+	s.sessionsMu.Lock()
+	state = s.sessions[sessionID]
+	if state == nil {
+		state = &adapterSession{}
+		s.sessions[sessionID] = state
+	}
+	state.history = sessionsHistory
+	state.model = model
+	state.workingDirectory = workingDirectory
+	state.lastOutput = output
+	state.lastUpstreamMethod = "prompt"
+	s.sessionsMu.Unlock()
+
+	result := map[string]any{
+		"success":        true,
+		"provider":       s.providerID,
+		"mode":           "single-agent",
+		"output":         output,
+		"sessionId":      sessionID,
+		"upstreamMethod": "prompt",
+	}
+	if workingDirectory != "" {
+		result["effectiveWorkingDirectory"] = workingDirectory
+	}
+	if model != "" {
+		result["resolvedModel"] = model
+	}
+	return result
+}
+
+func (s *Server) getOrCreateSession(sessionID string) *adapterSession {
+	s.sessionsMu.Lock()
+	defer s.sessionsMu.Unlock()
+	state := s.sessions[sessionID]
+	if state == nil {
+		state = &adapterSession{}
+		s.sessions[sessionID] = state
+	}
+	return &adapterSession{
+		history:            append([]string(nil), state.history...),
+		model:              state.model,
+		workingDirectory:   state.workingDirectory,
+		lastOutput:         state.lastOutput,
+		lastUpstreamMethod: state.lastUpstreamMethod,
+	}
+}
+
+func (s *Server) resetSession(sessionID string) *adapterSession {
+	s.sessionsMu.Lock()
+	defer s.sessionsMu.Unlock()
+	state := &adapterSession{}
+	s.sessions[sessionID] = state
+	return state
+}
+
+func (s *Server) closeSession(sessionID string) bool {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return false
+	}
+	s.sessionsMu.Lock()
+	defer s.sessionsMu.Unlock()
+	if _, ok := s.sessions[sessionID]; !ok {
+		return false
+	}
+	delete(s.sessions, sessionID)
+	return true
 }
 
 func parseAllowedOrigins(raw string) []string {
