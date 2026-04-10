@@ -325,6 +325,66 @@ func TestExecuteSessionTaskExplicitProviderRequiresAdvertisedBridgeProvider(t *t
 	if got := response["unavailableCode"]; got != "PROVIDER_UNAVAILABLE" {
 		t.Fatalf("expected PROVIDER_UNAVAILABLE, got %#v", response)
 	}
+	if got := response["unavailableMessage"]; got != "explicit provider is unavailable" {
+		t.Fatalf("expected explicit provider unavailable message, got %#v", response)
+	}
+}
+
+func TestExecuteSessionTaskAutoRoutingUsesBridgeSyncOrderForProviderResolution(t *testing.T) {
+	workspaceDir := filepath.Join(t.TempDir(), "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("create workspace: %v", err)
+	}
+
+	server := NewServer()
+	geminiProvider := newExternalSingleAgentProvider(t, "gemini", "gemini-output")
+	defer geminiProvider.Close()
+	codexProvider := newExternalSingleAgentProvider(t, "codex", "codex-output")
+	defer codexProvider.Close()
+	server.syncProviders([]syncedProvider{
+		{
+			ProviderID: "gemini",
+			Label:      "Gemini",
+			Endpoint:   geminiProvider.URL,
+			Enabled:    true,
+		},
+		{
+			ProviderID: "codex",
+			Label:      "Codex",
+			Endpoint:   codexProvider.URL,
+			Enabled:    true,
+		},
+	})
+
+	response, rpcErr := server.executeSessionTask(task{
+		req: shared.RPCRequest{
+			Method: "session.start",
+			Params: map[string]any{
+				"sessionId":        "session-auto-order",
+				"threadId":         "thread-auto-order",
+				"taskPrompt":       "create a powerpoint deck for launch",
+				"workingDirectory": workspaceDir,
+				"routing": map[string]any{
+					"routingMode":            "auto",
+					"preferredGatewayTarget": "local",
+					"availableSkills": []any{
+						map[string]any{
+							"id":          "pptx",
+							"label":       "PPTX",
+							"description": "slides",
+							"installed":   true,
+						},
+					},
+				},
+			},
+		},
+	})
+	if rpcErr != nil {
+		t.Fatalf("expected success, got rpc error: %v", rpcErr)
+	}
+	if got := response["resolvedProviderId"]; got != "gemini" {
+		t.Fatalf("expected resolved provider gemini from bridge order, got %#v", response)
+	}
 }
 
 func TestExecuteSessionTaskRequiresRouting(t *testing.T) {

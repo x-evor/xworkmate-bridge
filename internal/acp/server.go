@@ -50,6 +50,7 @@ type Server struct {
 	queues          map[string]chan task
 	gateway         *gatewayruntime.Manager
 	providerCatalog map[string]syncedProvider
+	providerOrder   []string
 	authService     *service.StaticTokenAuthService
 }
 
@@ -108,6 +109,7 @@ func NewServer() *Server {
 		queues:          make(map[string]chan task),
 		gateway:         gatewayruntime.NewManager(),
 		providerCatalog: make(map[string]syncedProvider),
+		providerOrder:   nil,
 		authService:     service.NewStaticTokenAuthService(strings.TrimSpace(shared.EnvOrDefault("ACP_AUTH_TOKEN", ""))),
 	}
 }
@@ -296,20 +298,20 @@ func (s *Server) handleRequest(
 	method := strings.TrimSpace(request.Method)
 	switch method {
 	case "acp.capabilities":
-		providers := s.availableProviders()
-		singleAgent := len(providers) > 0
+		providerCatalog := s.availableProviderCatalog()
+		singleAgent := len(providerCatalog) > 0
 		multiAgent := shared.BoolArg(
 			shared.EnvOrDefault("ACP_MULTI_AGENT_ENABLED", "true"),
 			true,
 		)
 		result := map[string]any{
-			"singleAgent": singleAgent,
-			"multiAgent":  multiAgent,
-			"providers":   providers,
+			"singleAgent":     singleAgent,
+			"multiAgent":      multiAgent,
+			"providerCatalog": providerCatalog,
 			"capabilities": map[string]any{
-				"single_agent": singleAgent,
-				"multi_agent":  multiAgent,
-				"providers":    providers,
+				"single_agent":    singleAgent,
+				"multi_agent":     multiAgent,
+				"providerCatalog": providerCatalog,
 			},
 		}
 		return result, nil

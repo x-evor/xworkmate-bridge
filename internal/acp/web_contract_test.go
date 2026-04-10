@@ -125,7 +125,7 @@ func TestHandleRPCCapabilitiesStillReturnsJSONResult(t *testing.T) {
 	if got := recorder.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
 		t.Fatalf("expected application/json content type, got %q", got)
 	}
-	if !strings.Contains(recorder.Body.String(), `"providers"`) {
+	if !strings.Contains(recorder.Body.String(), `"providerCatalog"`) {
 		t.Fatalf("expected capabilities response, got %q", recorder.Body.String())
 	}
 }

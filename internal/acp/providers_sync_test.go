@@ -41,19 +41,77 @@ func TestProvidersSyncUpdatesCapabilities(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("expected capabilities success, got %v", rpcErr)
 	}
-	providers, _ := result["providers"].([]string)
-	if len(providers) == 0 {
+	providerCatalog, ok := result["providerCatalog"].([]map[string]any)
+	if !ok || len(providerCatalog) == 0 {
 		t.Fatalf("expected synced provider in capabilities, got %#v", result)
 	}
-	found := false
-	for _, provider := range providers {
-		if provider == "claude" {
-			found = true
-			break
-		}
+	if providerCatalog[0]["providerId"] != "claude" {
+		t.Fatalf("expected claude provider after sync, got %#v", providerCatalog)
 	}
-	if !found {
-		t.Fatalf("expected claude provider after sync, got %#v", providers)
+	if providerCatalog[0]["label"] != "Claude" {
+		t.Fatalf("expected Claude label after sync, got %#v", providerCatalog)
+	}
+}
+
+func TestProvidersSyncPreservesProviderCatalogOrder(t *testing.T) {
+	server := NewServer()
+
+	_, rpcErr := server.handleRequest(shared.RPCRequest{
+		Method: "xworkmate.providers.sync",
+		Params: map[string]any{
+			"providers": []any{
+				map[string]any{
+					"providerId":          "gemini",
+					"label":               "Gemini",
+					"endpoint":            "http://127.0.0.1:9001",
+					"authorizationHeader": "Bearer gemini",
+					"enabled":             true,
+				},
+				map[string]any{
+					"providerId":          "codex",
+					"label":               "Codex",
+					"endpoint":            "http://127.0.0.1:9002",
+					"authorizationHeader": "Bearer codex",
+					"enabled":             true,
+				},
+				map[string]any{
+					"providerId":          "opencode",
+					"label":               "OpenCode",
+					"endpoint":            "http://127.0.0.1:9003",
+					"authorizationHeader": "Bearer opencode",
+					"enabled":             true,
+				},
+			},
+		},
+	}, func(map[string]any) {})
+	if rpcErr != nil {
+		t.Fatalf("expected sync success, got %v", rpcErr)
+	}
+
+	result, rpcErr := server.handleRequest(shared.RPCRequest{
+		Method: "acp.capabilities",
+		Params: map[string]any{},
+	}, func(map[string]any) {})
+	if rpcErr != nil {
+		t.Fatalf("expected capabilities success, got %v", rpcErr)
+	}
+	providerCatalog, ok := result["providerCatalog"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected providerCatalog array, got %#v", result)
+	}
+	if len(providerCatalog) != 3 {
+		t.Fatalf("expected 3 catalog entries, got %#v", providerCatalog)
+	}
+	gotOrder := []string{
+		providerCatalog[0]["providerId"].(string),
+		providerCatalog[1]["providerId"].(string),
+		providerCatalog[2]["providerId"].(string),
+	}
+	wantOrder := []string{"gemini", "codex", "opencode"}
+	for index, want := range wantOrder {
+		if gotOrder[index] != want {
+			t.Fatalf("expected provider order %#v, got %#v", wantOrder, gotOrder)
+		}
 	}
 }
 
