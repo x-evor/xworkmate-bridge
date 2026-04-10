@@ -15,6 +15,8 @@ This repository exposes one bridge entrypoint and forwards to four verified publ
 
 Example provider sync config: [example/config.yaml](/Users/shenlan/workspaces/cloud-neutral-toolkit/xworkmate-bridge/example/config.yaml)
 
+API reference: [docs/api-reference.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xworkmate-bridge/docs/api-reference.md)
+
 ## Compatibility
 
 For compatibility with `xworkmate-app`, the built helper binary name remains `xworkmate-go-core`.
