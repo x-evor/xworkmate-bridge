@@ -7,15 +7,6 @@ PLAYBOOK_DIR="${3:-playbooks}"
 
 cd "${PLAYBOOK_DIR}"
 
-temp_config="$(mktemp /tmp/xworkmate-bridge-ansible.XXXXXX.cfg)"
-trap 'rm -f "${temp_config}"' EXIT
-
-awk '
-  BEGIN { skip = 0 }
-  /^[[:space:]]*vault_password_file[[:space:]]*=/ { skip = 1; next }
-  { print }
-' ansible.cfg > "${temp_config}"
-
 args=(
   ansible-playbook
   -i inventory.ini
@@ -27,6 +18,5 @@ if [[ "${RUN_APPLY}" != "true" ]]; then
   args+=(-C)
 fi
 
-ANSIBLE_CONFIG="${temp_config}" \
-ANSIBLE_VAULT_PASSWORD_FILE="" \
+ANSIBLE_CONFIG="${PWD}/ansible.cfg" \
 "${args[@]}"
