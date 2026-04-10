@@ -37,6 +37,12 @@ Missing bearer auth returns a JSON-RPC error envelope with code `-32001`.
 
 ## Public Validation Results
 
+The ingress returned `200 OK` on all three public routes after re-apply, and the deployment response confirmed the active upstream mappings:
+
+- `codex` -> `127.0.0.1:9010`
+- `opencode` -> `127.0.0.1:3910`
+- `gemini` -> `127.0.0.1:8791`
+
 ### Codex
 
 Verified `acp.capabilities` over the public ingress:
@@ -52,13 +58,14 @@ Verified `acp.capabilities` over the public ingress:
 }
 ```
 
-Verified `session.start` reached the Codex execution layer, but the task failed upstream.
+Verified end-to-end task execution over the public ingress.
 
-Observed upstream failure summary:
+Observed conversation behavior:
 
-- repeated `wss://api.openai.com/v1/responses` `500 Internal Server Error`
-- final `https://api.openai.com/v1/responses` `401 Unauthorized`
-- message: `Missing bearer or basic authentication in header`
+- `session.start` succeeded and returned `round1`
+- `session.message` also succeeded and returned `round2`
+- `session.message` must include the same `routing` payload as `session.start`
+- omitting `routing` returns `ROUTING_REQUIRED`
 
 ### OpenCode
 
@@ -87,6 +94,13 @@ Observed result:
 }
 ```
 
+Observed conversation behavior:
+
+- `session.start` succeeded and returned `round1`
+- `session.message` also succeeded and returned `round2`
+- `session.message` must include the same `routing` payload as `session.start`
+- omitting `routing` returns `ROUTING_REQUIRED`
+
 ### Gemini
 
 Verified `acp.capabilities` over the public ingress:
@@ -112,6 +126,27 @@ Before the compatibility layer landed, the upstream Gemini ACP returned:
 ```
 
 The adapter has now been updated so `session.start` and `session.message` default to adapter-local prompt compatibility instead of forwarding unsupported upstream methods.
+
+Observed conversation behavior after re-apply:
+
+- `session.start` succeeded and returned `round1`
+- `session.message` succeeded and returned `round2`
+- long conversation validation passed through the public ingress
+
+## Long Conversation Validation
+
+All three public ACP agent entries now pass a two-turn conversation check:
+
+1. `session.start`
+2. `session.message`
+
+Verified result summary:
+
+- `codex` long conversation passed
+- `opencode` long conversation passed
+- `gemini` long conversation passed
+
+This is the current app-integration baseline for `acp-server.svc.plus`.
 
 ## App Integration Notes
 
@@ -152,22 +187,7 @@ For single-agent task execution:
 
 ### Provider-specific notes
 
-- `opencode` is the currently verified public task path.
-- `gemini` now depends on the adapter compatibility layer, not an upstream Gemini ACP conversation method.
-- `codex` public routing is healthy, but task execution requires upstream OpenAI auth to be present in the runtime environment.
-
-## Codex Runtime Root Cause
-
-Remote inspection on `jp-xhttp-contabo.svc.plus` showed:
-
-- `codex-app-server` only had `HOME=/root TERM=xterm-256color NODE_NO_WARNINGS=1`
-- `/root/.codex` existed, but no auth/config JSON files were present
-- `codex --version` was `0.117.0`
-
-That means the deployed Codex runtime was able to start, but it did not have a usable OpenAI auth source.
-
-For future deployments, the systemd units should provide:
-
-- `CODEX_HOME`
-- `OPENAI_API_KEY` when API-key auth is used
-- optional custom base URL variables when running against a non-default upstream
+- `codex`, `opencode`, and `gemini` are all now verified public task paths.
+- `gemini` still depends on the adapter compatibility layer, not a native upstream Gemini ACP conversation method.
+- For multi-turn flows, apps should preserve and resend `routing` on every `session.message`.
+- `codex` and `opencode` currently require explicit `routing` on follow-up turns.

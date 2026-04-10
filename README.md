@@ -8,6 +8,7 @@
 - ACP stdio bridge entrypoint
 - Go helper runtime packages used by the ACP bridge
 - Unit tests for bridge routing, RPC contracts, mounts, runtime dispatch, and provider sync
+- Architecture notes and public ingress topology docs in [docs/architecture/acp-forwarding-topology.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xworkmate-bridge/docs/architecture/acp-forwarding-topology.md)
 
 ## Compatibility
 
