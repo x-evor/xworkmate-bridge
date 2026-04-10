@@ -125,18 +125,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install "ansible-core==2.18.3"
 
-      - name: Prepare Ansible vault password
-        env:
-          INTERNAL_SERVICE_TOKEN: ${{ env.INTERNAL_SERVICE_TOKEN }}
-        run: |
-          if [[ -z "${INTERNAL_SERVICE_TOKEN}" ]]; then
-            echo "INTERNAL_SERVICE_TOKEN is required for Ansible vault access" >&2
-            exit 1
-          fi
-
-          printf '%s' "${INTERNAL_SERVICE_TOKEN}" > "${HOME}/.vault_password"
-          chmod 600 "${HOME}/.vault_password"
-
       - name: Resolve deployment settings
         id: deploy_meta
         run: |
@@ -164,6 +152,8 @@ jobs:
 
       - name: Run Ansible deploy playbook
         working-directory: xworkmate-bridge
+        env:
+          INTERNAL_SERVICE_TOKEN: ${{ env.INTERNAL_SERVICE_TOKEN }}
         run: bash ./scripts/github-actions/deploy.sh "${{ steps.deploy_meta.outputs.target_host }}" "${{ steps.deploy_meta.outputs.run_apply }}" ../playbooks
 
   validate:
