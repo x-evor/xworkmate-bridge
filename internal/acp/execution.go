@@ -153,14 +153,29 @@ func (s *Server) runSingleAgentViaExternalProvider(
 		return nil, fmt.Errorf("external provider endpoint is missing")
 	}
 	forwardParams := sanitizeExternalACPParams(method, params)
-	return requestExternalACP(
+	collector := &externalACPNotificationCollector{}
+	combinedNotify := func(message map[string]any) {
+		collector.observe(message)
+		if notify != nil {
+			notify(message)
+		}
+	}
+	response, err := requestExternalACP(
 		ctx,
 		endpoint,
 		provider.AuthorizationHeader,
 		method,
 		forwardParams,
-		notify,
+		combinedNotify,
 	)
+	if err != nil {
+		return nil, err
+	}
+	result := asMap(response["result"])
+	if len(result) == 0 {
+		result = response
+	}
+	return collector.apply(result), nil
 }
 
 func resolveSingleAgentForwardEndpoint(provider syncedProvider) string {
@@ -304,6 +319,80 @@ func normalizeAuthorizationHeader(raw string) string {
 		return normalized
 	}
 	return "Bearer " + normalized
+}
+
+type externalACPNotificationCollector struct {
+	deltas           strings.Builder
+	lastMessage      string
+	turnID           string
+	workingDirectory string
+}
+
+func (c *externalACPNotificationCollector) observe(notification map[string]any) {
+	method := strings.TrimSpace(shared.StringArg(notification, "method", ""))
+	if method != "session.update" && method != "acp.session.update" {
+		return
+	}
+	params := asMap(notification["params"])
+	if len(params) == 0 {
+		return
+	}
+	if turnID := strings.TrimSpace(shared.StringArg(params, "turnId", "")); turnID != "" {
+		c.turnID = turnID
+	}
+	for _, key := range []string{"resolvedWorkingDirectory", "effectiveWorkingDirectory", "workingDirectory"} {
+		if workingDirectory := strings.TrimSpace(shared.StringArg(params, key, "")); workingDirectory != "" {
+			c.workingDirectory = workingDirectory
+			break
+		}
+	}
+	if delta := strings.TrimSpace(shared.StringArg(params, "delta", "")); delta != "" {
+		if c.deltas.Len() > 0 {
+			c.deltas.WriteString("\n")
+		}
+		c.deltas.WriteString(delta)
+	}
+	message := strings.TrimSpace(shared.StringArg(params, "message", ""))
+	if message == "" {
+		message = strings.TrimSpace(shared.StringArg(asMap(params["message"]), "content", ""))
+	}
+	if message != "" && message != "session started" && message != "single-agent completed" {
+		c.lastMessage = message
+	}
+}
+
+func (c *externalACPNotificationCollector) apply(result map[string]any) map[string]any {
+	if result == nil {
+		result = map[string]any{}
+	}
+	text := strings.TrimSpace(shared.StringArg(result, "output", ""))
+	if text == "" {
+		text = strings.TrimSpace(shared.StringArg(result, "summary", ""))
+	}
+	if text == "" {
+		text = strings.TrimSpace(shared.StringArg(result, "message", ""))
+	}
+	if text == "" {
+		text = strings.TrimSpace(c.deltas.String())
+	}
+	if text == "" {
+		text = strings.TrimSpace(c.lastMessage)
+	}
+	if text != "" {
+		if _, exists := result["output"]; !exists {
+			result["output"] = text
+		}
+		if _, exists := result["summary"]; !exists {
+			result["summary"] = text
+		}
+	}
+	if _, exists := result["turnId"]; !exists && strings.TrimSpace(c.turnID) != "" {
+		result["turnId"] = strings.TrimSpace(c.turnID)
+	}
+	if _, exists := result["resolvedWorkingDirectory"]; !exists && strings.TrimSpace(c.workingDirectory) != "" {
+		result["resolvedWorkingDirectory"] = strings.TrimSpace(c.workingDirectory)
+	}
+	return result
 }
 
 func requestExternalACPWebSocket(

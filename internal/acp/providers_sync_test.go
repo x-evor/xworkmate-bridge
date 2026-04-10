@@ -296,3 +296,38 @@ func TestHandleRPCForwardsInboundBearerToExternalProvider(t *testing.T) {
 		t.Fatalf("expected forwarded provider response, got %q", recorder.Body.String())
 	}
 }
+
+func TestExternalACPNotificationCollectorSynthesizesOutputAndWorkspace(t *testing.T) {
+	collector := &externalACPNotificationCollector{}
+	collector.observe(map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "session.update",
+		"params": map[string]any{
+			"sessionId":                "session-streamed",
+			"threadId":                 "thread-streamed",
+			"turnId":                   "turn-streamed",
+			"type":                     "delta",
+			"delta":                    "streamed external output",
+			"resolvedWorkingDirectory": "/tmp/thread-streamed",
+			"pending":                  false,
+			"error":                    false,
+		},
+	})
+
+	result := collector.apply(map[string]any{
+		"success": true,
+	})
+
+	if got := result["output"]; got != "streamed external output" {
+		t.Fatalf("expected synthesized output from notifications, got %#v", result)
+	}
+	if got := result["summary"]; got != "streamed external output" {
+		t.Fatalf("expected synthesized summary from notifications, got %#v", result)
+	}
+	if got := result["turnId"]; got != "turn-streamed" {
+		t.Fatalf("expected synthesized turnId, got %#v", result)
+	}
+	if got := result["resolvedWorkingDirectory"]; got != "/tmp/thread-streamed" {
+		t.Fatalf("expected synthesized working directory, got %#v", result)
+	}
+}
