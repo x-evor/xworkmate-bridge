@@ -108,6 +108,12 @@ jobs:
           token: ${{ secrets.WORKSPACE_REPO_TOKEN || github.token }}
           path: playbooks
 
+      - name: Download build artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
+        with:
+          name: xworkmate-bridge-linux-amd64
+          path: xworkmate-bridge/dist
+
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -154,6 +160,7 @@ jobs:
         working-directory: xworkmate-bridge
         env:
           INTERNAL_SERVICE_TOKEN: ${{ env.INTERNAL_SERVICE_TOKEN }}
+          XWORKMATE_BRIDGE_ARTIFACT_PATH: ${{ github.workspace }}/xworkmate-bridge/dist/xworkmate-bridge
         run: bash ./scripts/github-actions/deploy.sh "${{ steps.deploy_meta.outputs.target_host }}" "${{ steps.deploy_meta.outputs.run_apply }}" ../playbooks
 
   validate:
