@@ -170,6 +170,104 @@ func TestExecuteSessionTaskUsesSyncedExternalProvider(t *testing.T) {
 	}
 }
 
+func TestExecuteSessionTaskEnrichesExternalProviderResultWithArtifactsAndRemoteMetadata(t *testing.T) {
+	workingDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(workingDir, "outputs"), 0o755); err != nil {
+		t.Fatalf("mkdir outputs: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(workingDir, "outputs", "report.txt"),
+		[]byte("artifact-body"),
+		0o644,
+	); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+
+	externalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/acp/rpc" {
+			http.NotFound(w, r)
+			return
+		}
+		defer r.Body.Close()
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      request["id"],
+			"result": map[string]any{
+				"success":                true,
+				"output":                 "external-provider-ok",
+				"turnId":                 "turn-external-artifacts",
+				"provider":               "claude",
+				"mode":                   "single-agent",
+				"resolvedWorkingDirectory": "/remote/threads/task-42",
+				"resolvedWorkspaceRefKind": "remotePath",
+			},
+		})
+	}))
+	defer externalServer.Close()
+
+	server := NewServer()
+	server.syncProviders([]syncedProvider{
+		{
+			ProviderID:          "claude",
+			Label:               "Claude",
+			Endpoint:            externalServer.URL,
+			AuthorizationHeader: "Bearer test",
+			Enabled:             true,
+		},
+	})
+
+	response, rpcErr := server.executeSessionTask(task{
+		req: shared.RPCRequest{
+			Method: "session.start",
+			Params: map[string]any{
+				"sessionId":        "session-external-artifacts",
+				"threadId":         "thread-external-artifacts",
+				"taskPrompt":       "hello from external provider",
+				"workingDirectory": workingDir,
+				"routing": map[string]any{
+					"routingMode":             "explicit",
+					"explicitExecutionTarget": "singleAgent",
+					"explicitProviderId":      "claude",
+				},
+			},
+		},
+	})
+	if rpcErr != nil {
+		t.Fatalf("expected success, got rpc error: %v", rpcErr)
+	}
+	if got := response["remoteWorkingDirectory"]; got != "/remote/threads/task-42" {
+		t.Fatalf("expected remoteWorkingDirectory to be preserved, got %#v", got)
+	}
+	if got := response["remoteWorkspaceRefKind"]; got != "remotePath" {
+		t.Fatalf("expected remoteWorkspaceRefKind remotePath, got %#v", got)
+	}
+	artifacts, ok := response["artifacts"].([]map[string]any)
+	if !ok || len(artifacts) == 0 {
+		t.Fatalf("expected enriched artifacts, got %#v", response["artifacts"])
+	}
+	artifact := artifacts[0]
+	if got := artifact["relativePath"]; got != "outputs/report.txt" {
+		t.Fatalf("expected relativePath outputs/report.txt, got %#v", got)
+	}
+	if got := artifact["content"]; got != "artifact-body" {
+		t.Fatalf("expected inline artifact content, got %#v", got)
+	}
+	if got := artifact["encoding"]; got != "utf8" {
+		t.Fatalf("expected utf8 artifact encoding, got %#v", got)
+	}
+	remoteExecution, ok := response["remoteExecution"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected remoteExecution metadata, got %#v", response["remoteExecution"])
+	}
+	if got := remoteExecution["remoteWorkingDirectory"]; got != "/remote/threads/task-42" {
+		t.Fatalf("expected remoteExecution remoteWorkingDirectory, got %#v", got)
+	}
+}
+
 func TestRunSingleAgentUsesFrozenExternalProviderParams(t *testing.T) {
 	externalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/acp/rpc" {

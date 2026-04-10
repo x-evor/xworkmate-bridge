@@ -733,7 +733,7 @@ func (s *Server) runSingleAgent(
 			if _, exists := result["effectiveWorkingDirectory"]; !exists && effectiveWorkingDirectory != "" {
 				result["effectiveWorkingDirectory"] = effectiveWorkingDirectory
 			}
-			return taskResult{response: result}
+			return taskResult{response: enrichSingleAgentResultArtifacts(result, params)}
 		}
 		s.emitSessionUpdate(session, notify, turnID, map[string]any{
 			"type":    "status",
@@ -778,7 +778,7 @@ func (s *Server) runSingleAgent(
 			if _, exists := result["effectiveWorkingDirectory"]; !exists && effectiveWorkingDirectory != "" {
 				result["effectiveWorkingDirectory"] = effectiveWorkingDirectory
 			}
-			return taskResult{response: result}
+			return taskResult{response: enrichSingleAgentResultArtifacts(result, params)}
 		}
 		s.emitSessionUpdate(session, notify, turnID, map[string]any{
 			"type":    "status",
@@ -847,14 +847,14 @@ func (s *Server) runSingleAgent(
 	})
 
 	return taskResult{
-		response: map[string]any{
+		response: enrichSingleAgentResultArtifacts(map[string]any{
 			"success":                  true,
 			"output":                   output,
 			"turnId":                   turnID,
 			"mode":                     "single-agent",
 			"provider":                 provider,
 			"effectiveWorkingDirectory": effectiveWorkingDirectory,
-		},
+		}, params),
 	}
 }
 

@@ -2,10 +2,15 @@ package acp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -175,7 +180,7 @@ func (s *Server) runSingleAgentViaExternalProvider(
 	if len(result) == 0 {
 		result = response
 	}
-	return collector.apply(result), nil
+	return enrichSingleAgentResultArtifacts(collector.apply(result), forwardParams), nil
 }
 
 func resolveSingleAgentForwardEndpoint(provider syncedProvider) string {
@@ -393,6 +398,180 @@ func (c *externalACPNotificationCollector) apply(result map[string]any) map[stri
 		result["resolvedWorkingDirectory"] = strings.TrimSpace(c.workingDirectory)
 	}
 	return result
+}
+
+func enrichSingleAgentResultArtifacts(result map[string]any, requestParams map[string]any) map[string]any {
+	if result == nil {
+		result = map[string]any{}
+	}
+	remoteWorkingDirectory := firstNonEmptyString(
+		shared.StringArg(result, "remoteWorkingDirectory", ""),
+		shared.StringArg(asMap(result["remoteExecution"]), "remoteWorkingDirectory", ""),
+		shared.StringArg(result, "resolvedWorkingDirectory", ""),
+		shared.StringArg(result, "effectiveWorkingDirectory", ""),
+		shared.StringArg(requestParams, "workingDirectory", ""),
+	)
+	remoteWorkspaceRefKind := firstNonEmptyString(
+		shared.StringArg(result, "remoteWorkspaceRefKind", ""),
+		shared.StringArg(asMap(result["remoteExecution"]), "remoteWorkspaceRefKind", ""),
+		"remotePath",
+	)
+	if strings.TrimSpace(shared.StringArg(result, "resultSummary", "")) == "" {
+		if summary := firstNonEmptyString(
+			shared.StringArg(result, "summary", ""),
+			shared.StringArg(result, "output", ""),
+			shared.StringArg(result, "message", ""),
+		); summary != "" {
+			result["resultSummary"] = summary
+		}
+	}
+	result["remoteWorkingDirectory"] = remoteWorkingDirectory
+	result["remoteWorkspaceRefKind"] = remoteWorkspaceRefKind
+	result["remoteExecution"] = map[string]any{
+		"remoteWorkingDirectory": remoteWorkingDirectory,
+		"remoteWorkspaceRefKind": remoteWorkspaceRefKind,
+		"provider":               shared.StringArg(result, "provider", ""),
+		"turnId":                 shared.StringArg(result, "turnId", ""),
+	}
+	if len(asSlice(result["artifacts"])) == 0 {
+		result["artifacts"] = collectInlineArtifactsPayload(requestParams, result)
+	}
+	return result
+}
+
+func collectInlineArtifactsPayload(requestParams, result map[string]any) []map[string]any {
+	roots := []string{
+		shared.StringArg(requestParams, "workingDirectory", ""),
+		shared.StringArg(result, "resolvedWorkingDirectory", ""),
+		shared.StringArg(result, "effectiveWorkingDirectory", ""),
+	}
+	seen := map[string]struct{}{}
+	for _, root := range roots {
+		root = strings.TrimSpace(root)
+		if root == "" {
+			continue
+		}
+		if _, ok := seen[root]; ok {
+			continue
+		}
+		seen[root] = struct{}{}
+		entries := buildArtifactsForRoot(root)
+		if len(entries) > 0 {
+			return entries
+		}
+	}
+	return []map[string]any{}
+}
+
+func buildArtifactsForRoot(root string) []map[string]any {
+	info, err := os.Stat(root)
+	if err != nil || !info.IsDir() {
+		return []map[string]any{}
+	}
+	type candidate struct {
+		absolute string
+		relative string
+		modTime  time.Time
+		size     int64
+	}
+	const maxFiles = 24
+	const maxInlineBytes = 2 * 1024 * 1024
+	ignoredDirs := map[string]struct{}{
+		".git": {}, ".dart_tool": {}, "build": {}, "node_modules": {},
+	}
+	candidates := make([]candidate, 0, maxFiles)
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if _, ignored := ignoredDirs[d.Name()]; ignored && path != root {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil || info.Size() > maxInlineBytes {
+			return nil
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		relative = filepath.ToSlash(strings.TrimSpace(relative))
+		if relative == "" || strings.HasPrefix(relative, "../") {
+			return nil
+		}
+		candidates = append(candidates, candidate{
+			absolute: path,
+			relative: relative,
+			modTime:  info.ModTime(),
+			size:     info.Size(),
+		})
+		return nil
+	})
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].modTime.After(candidates[j].modTime)
+	})
+	if len(candidates) > maxFiles {
+		candidates = candidates[:maxFiles]
+	}
+	artifacts := make([]map[string]any, 0, len(candidates))
+	for _, item := range candidates {
+		content, err := os.ReadFile(item.absolute)
+		if err != nil {
+			continue
+		}
+		contentType := mime.TypeByExtension(filepath.Ext(item.absolute))
+		if strings.TrimSpace(contentType) == "" {
+			contentType = "application/octet-stream"
+		}
+		encoding := "base64"
+		payload := base64.StdEncoding.EncodeToString(content)
+		if isInlineTextArtifact(item.relative, contentType) {
+			encoding = "utf8"
+			payload = string(content)
+		}
+		artifacts = append(artifacts, map[string]any{
+			"relativePath": item.relative,
+			"label":        filepath.Base(item.absolute),
+			"contentType":  contentType,
+			"encoding":     encoding,
+			"content":      payload,
+			"sizeBytes":    item.size,
+		})
+	}
+	return artifacts
+}
+
+func isInlineTextArtifact(path, contentType string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "text/") {
+		return true
+	}
+	switch ext {
+	case ".md", ".markdown", ".txt", ".log", ".json", ".yaml", ".yml", ".csv", ".html", ".htm":
+		return true
+	default:
+		return false
+	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func asSlice(value any) []any {
+	if value == nil {
+		return nil
+	}
+	items, _ := value.([]any)
+	return items
 }
 
 func requestExternalACPWebSocket(
