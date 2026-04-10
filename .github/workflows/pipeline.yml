@@ -64,6 +64,8 @@ jobs:
     name: Build
     needs: prep
     runs-on: ubuntu-latest
+    outputs:
+      artifact_name: ${{ steps.artifact_meta.outputs.artifact_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -80,10 +82,14 @@ jobs:
       - name: Smoke test built artifact
         run: ./dist/xworkmate-bridge --help >/dev/null
 
+      - name: Record artifact metadata
+        id: artifact_meta
+        run: echo "artifact_name=xworkmate-bridge-linux-amd64" >> "$GITHUB_OUTPUT"
+
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: xworkmate-bridge-linux-amd64
+          name: ${{ steps.artifact_meta.outputs.artifact_name }}
           path: dist/xworkmate-bridge
 
   deploy:
@@ -111,7 +117,7 @@ jobs:
       - name: Download build artifact
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
         with:
-          name: xworkmate-bridge-linux-amd64
+          name: ${{ needs.build.outputs.artifact_name }}
           path: xworkmate-bridge/dist
 
       - name: Set up Go
