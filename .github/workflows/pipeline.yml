@@ -57,7 +57,7 @@ jobs:
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
           echo "${GOBIN}" >> "$GITHUB_PATH"
 
-      - name: Run Go static checks
+      - name: Run lint and tests
         run: bash ./scripts/github-actions/prep.sh
 
   build:
@@ -76,6 +76,9 @@ jobs:
 
       - name: Build x86 artifact
         run: bash ./scripts/github-actions/build-artifact.sh dist
+
+      - name: Smoke test built artifact
+        run: ./dist/xworkmate-bridge --help >/dev/null
 
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
