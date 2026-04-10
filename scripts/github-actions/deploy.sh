@@ -4,9 +4,17 @@ set -euo pipefail
 TARGET_HOST="${1:?target host is required}"
 RUN_APPLY="${2:?run_apply flag is required}"
 PLAYBOOK_DIR="${3:-playbooks}"
-INTERNAL_SERVICE_TOKEN="${INTERNAL_SERVICE_TOKEN:-}"
 
 cd "${PLAYBOOK_DIR}"
+
+temp_config="$(mktemp)"
+trap 'rm -f "${temp_config}"' EXIT
+
+awk '
+  BEGIN { skip = 0 }
+  /^[[:space:]]*vault_password_file[[:space:]]*=/ { skip = 1; next }
+  { print }
+' ansible.cfg > "${temp_config}"
 
 args=(
   ansible-playbook
@@ -15,12 +23,10 @@ args=(
   -l "${TARGET_HOST}"
 )
 
-if [[ -n "${INTERNAL_SERVICE_TOKEN}" ]]; then
-  args+=(--vault-password-file <(printf '%s' "${INTERNAL_SERVICE_TOKEN}"))
-fi
-
 if [[ "${RUN_APPLY}" != "true" ]]; then
   args+=(-C)
 fi
 
+ANSIBLE_CONFIG="${temp_config}" \
+ANSIBLE_VAULT_PASSWORD_FILE="" \
 "${args[@]}"
