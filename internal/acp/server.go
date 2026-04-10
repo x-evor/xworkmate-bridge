@@ -75,6 +75,13 @@ func Serve(args []string) error {
 		Addr: strings.TrimSpace(*listen),
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
+			case "/":
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				_, _ = w.Write([]byte("xworkmate-bridge is running"))
+			case "/bridge/bootstrap/health":
+				server.HandleBridgeBootstrapHealth(w, r)
+			case "/bridge/bootstrap/consume":
+				server.HandleBridgeBootstrapConsume(w, r)
 			case "/acp/rpc":
 				server.HandleRPC(w, r)
 			case "/acp":
@@ -848,11 +855,11 @@ func (s *Server) runSingleAgent(
 
 	return taskResult{
 		response: enrichSingleAgentResultArtifacts(map[string]any{
-			"success":                  true,
-			"output":                   output,
-			"turnId":                   turnID,
-			"mode":                     "single-agent",
-			"provider":                 provider,
+			"success":                   true,
+			"output":                    output,
+			"turnId":                    turnID,
+			"mode":                      "single-agent",
+			"provider":                  provider,
 			"effectiveWorkingDirectory": effectiveWorkingDirectory,
 		}, params),
 	}
