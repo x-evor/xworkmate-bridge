@@ -178,7 +178,7 @@ jobs:
       BRIDGE_SERVER_URL: ${{ vars.BRIDGE_SERVER_URL || 'https://xworkmate-bridge.svc.plus' }}
       ACP_INGRESS_URL: ${{ vars.ACP_INGRESS_URL || 'https://acp-server.svc.plus' }}
       OPENCLAW_URL: ${{ vars.OPENCLAW_URL || 'wss://openclaw.svc.plus' }}
-      BRIDGE_AUTH_TOKEN: ${{ secrets.BRIDGE_AUTH_TOKEN || secrets.INTERNAL_SERVICE_TOKEN }}
+      INTERNAL_SERVICE_TOKEN: ${{ secrets.INTERNAL_SERVICE_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
