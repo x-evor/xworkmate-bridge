@@ -1,6 +1,7 @@
 package acp
 
 import (
+	"net/url"
 	"strings"
 	"time"
 
@@ -52,6 +53,7 @@ func handleGatewayConnect(
 			Password:    strings.TrimSpace(shared.StringArg(asMap(params["auth"]), "password", "")),
 		},
 	}
+	request.ReportedRemoteAddress = resolveGatewayReportedRemoteAddress(server, request)
 	result := server.gateway.Connect(request, notify)
 	return map[string]any{
 		"ok":                  result.OK,
@@ -156,4 +158,56 @@ func parsePositiveInt(value any) int {
 		return shared.IntArg(typed, 0)
 	}
 	return 0
+}
+
+func resolveGatewayReportedRemoteAddress(
+	server *Server,
+	request gatewayruntime.ConnectRequest,
+) string {
+	if strings.TrimSpace(strings.ToLower(request.Mode)) != "remote" {
+		return ""
+	}
+	if !shouldOverrideGatewayReportedRemoteAddress(request.Endpoint.Host) {
+		return ""
+	}
+	if server != nil {
+		if provider, ok := server.syncedProviderByID("openclaw"); ok {
+			if reported := publicEndpointAddressLabel(provider.Endpoint); reported != "" {
+				return reported
+			}
+		}
+	}
+	return publicEndpointAddressLabel(
+		shared.EnvOrDefault("OPENCLAW_URL", "wss://openclaw.svc.plus"),
+	)
+}
+
+func shouldOverrideGatewayReportedRemoteAddress(host string) bool {
+	switch strings.TrimSpace(strings.ToLower(host)) {
+	case "127.0.0.1", "localhost", "::1", "xworkmate-bridge.svc.plus":
+		return true
+	default:
+		return false
+	}
+}
+
+func publicEndpointAddressLabel(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || strings.TrimSpace(parsed.Hostname()) == "" {
+		return ""
+	}
+	host := strings.TrimSpace(parsed.Hostname())
+	port := strings.TrimSpace(parsed.Port())
+	if port == "" {
+		switch strings.TrimSpace(strings.ToLower(parsed.Scheme)) {
+		case "https", "wss":
+			port = "443"
+		case "http", "ws":
+			port = "80"
+		}
+	}
+	if port == "" {
+		return host
+	}
+	return host + ":" + port
 }

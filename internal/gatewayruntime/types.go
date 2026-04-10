@@ -58,21 +58,22 @@ type AuthConfig struct {
 }
 
 type ConnectRequest struct {
-	RuntimeID          string
-	Mode               string
-	ClientID           string
-	Locale             string
-	UserAgent          string
-	Endpoint           Endpoint
-	ConnectAuthMode    string
-	ConnectAuthFields  []string
-	ConnectAuthSources []string
-	HasSharedAuth      bool
-	HasDeviceToken     bool
-	PackageInfo        PackageInfo
-	DeviceInfo         DeviceInfo
-	Identity           DeviceIdentity
-	Auth               AuthConfig
+	RuntimeID             string
+	Mode                  string
+	ClientID              string
+	Locale                string
+	UserAgent             string
+	Endpoint              Endpoint
+	ReportedRemoteAddress string
+	ConnectAuthMode       string
+	ConnectAuthFields     []string
+	ConnectAuthSources    []string
+	HasSharedAuth         bool
+	HasDeviceToken        bool
+	PackageInfo           PackageInfo
+	DeviceInfo            DeviceInfo
+	Identity              DeviceIdentity
+	Auth                  AuthConfig
 }
 
 type ConnectResult struct {

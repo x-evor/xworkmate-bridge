@@ -292,11 +292,7 @@ func (s *session) connect() ConnectResult {
 	s.updateSnapshot(func(snapshot *runtimeSnapshot) {
 		snapshot.Status = "connecting"
 		snapshot.StatusText = "Connecting…"
-		snapshot.RemoteAddress = fmt.Sprintf(
-			"%s:%d",
-			s.config.Endpoint.Host,
-			s.config.Endpoint.Port,
-		)
+		snapshot.RemoteAddress = s.reportedRemoteAddress()
 		snapshot.LastError = ""
 		snapshot.LastErrorCode = ""
 		snapshot.LastErrorDetailCode = ""
@@ -382,11 +378,7 @@ func (s *session) connectAttempt() (ConnectResult, *GatewayError) {
 		snapshot.Status = "connected"
 		snapshot.StatusText = "Connected"
 		snapshot.ServerName = strings.TrimSpace(stringValue(server["host"]))
-		snapshot.RemoteAddress = fmt.Sprintf(
-			"%s:%d",
-			s.config.Endpoint.Host,
-			s.config.Endpoint.Port,
-		)
+		snapshot.RemoteAddress = s.reportedRemoteAddress()
 		snapshot.MainSessionKey = strings.TrimSpace(
 			stringValue(sessionDefaults["mainSessionKey"]),
 		)
@@ -419,6 +411,14 @@ func (s *session) connectAttempt() (ConnectResult, *GatewayError) {
 		Auth:                auth,
 		ReturnedDeviceToken: returnedDeviceToken,
 	}, nil
+}
+
+func (s *session) reportedRemoteAddress() string {
+	reported := strings.TrimSpace(s.config.ReportedRemoteAddress)
+	if reported != "" {
+		return reported
+	}
+	return fmt.Sprintf("%s:%d", s.config.Endpoint.Host, s.config.Endpoint.Port)
 }
 
 func (s *session) request(
