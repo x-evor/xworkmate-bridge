@@ -7,7 +7,7 @@ PLAYBOOK_DIR="${3:-playbooks}"
 
 cd "${PLAYBOOK_DIR}"
 
-temp_config="$(mktemp)"
+temp_config="$(mktemp /tmp/xworkmate-bridge-ansible.XXXXXX.cfg)"
 trap 'rm -f "${temp_config}"' EXIT
 
 awk '
