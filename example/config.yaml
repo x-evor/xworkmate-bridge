@@ -1,0 +1,42 @@
+# Example configuration for xworkmate-bridge public ingress and provider sync.
+# The bridge itself validates inbound requests with:
+#   Authorization: Bearer ${ACP_AUTH_TOKEN}
+# Each external provider can also carry its own outbound Authorization header.
+
+bridge:
+  listenAddr: 127.0.0.1:8787
+  authToken: ${ACP_AUTH_TOKEN}
+  allowedOrigins:
+    - https://xworkmate.svc.plus
+    - http://localhost:*
+    - http://127.0.0.1:*
+
+providers:
+  - providerId: openclaw
+    label: OpenClaw
+    endpoint: wss://openclaw.svc.plus
+    authorizationHeader: Bearer ${OPENCLAW_AUTH_TOKEN}
+    enabled: true
+
+  - providerId: codex
+    label: Codex
+    endpoint: https://acp-server.svc.plus/codex/acp/rpc
+    authorizationHeader: Bearer ${CODEX_AUTH_TOKEN}
+    enabled: true
+
+  - providerId: opencode
+    label: OpenCode
+    endpoint: https://acp-server.svc.plus/opencode/acp/rpc
+    authorizationHeader: Bearer ${OPENCODE_AUTH_TOKEN}
+    enabled: true
+
+  - providerId: gemini
+    label: Gemini
+    endpoint: https://acp-server.svc.plus/gemini/acp/rpc
+    authorizationHeader: Bearer ${GEMINI_AUTH_TOKEN}
+    enabled: true
+
+notes:
+  - The bridge reads its own auth token from ACP_AUTH_TOKEN.
+  - The provider catalog is normally synced through xworkmate.providers.sync.
+  - session.message should resend routing on follow-up turns for codex and opencode.

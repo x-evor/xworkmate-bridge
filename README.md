@@ -8,7 +8,12 @@
 - ACP stdio bridge entrypoint
 - Go helper runtime packages used by the ACP bridge
 - Unit tests for bridge routing, RPC contracts, mounts, runtime dispatch, and provider sync
-- Architecture notes and public ingress topology docs in [docs/architecture/acp-forwarding-topology.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xworkmate-bridge/docs/architecture/acp-forwarding-topology.md)
+
+## ACP Forwarding Topology
+
+This repository exposes one bridge entrypoint and forwards to four verified public targets. The full Mermaid diagram lives in [docs/architecture/acp-forwarding-topology.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xworkmate-bridge/docs/architecture/acp-forwarding-topology.md).
+
+Example provider sync config: [example/config.yaml](/Users/shenlan/workspaces/cloud-neutral-toolkit/xworkmate-bridge/example/config.yaml)
 
 ## Compatibility
 
