@@ -129,9 +129,8 @@ Response shape:
 
 Notes:
 
-- `providers` is the union of:
-  - synced external providers from `xworkmate.providers.sync`
-  - locally detected ACP providers from `shared.DetectACPProviders()`
+- `providers` comes from the synced external provider catalog registered through
+  `xworkmate.providers.sync`
 - `multiAgent` is controlled by `ACP_MULTI_AGENT_ENABLED`, default `true`
 
 ### 3.2 `session.start`

@@ -709,13 +709,10 @@ func (s *Server) runSingleAgent(
 	workingDirectory := strings.TrimSpace(
 		shared.StringArg(params, "workingDirectory", ""),
 	)
-	workingDirectory, effectiveWorkingDirectory := shared.NormalizeProviderWorkingDirectory(
+	_, effectiveWorkingDirectory := shared.NormalizeProviderWorkingDirectory(
 		provider,
 		workingDirectory,
 	)
-	model := strings.TrimSpace(shared.StringArg(params, "model", ""))
-	prompt := strings.TrimSpace(shared.StringArg(params, "taskPrompt", ""))
-	prompt = shared.AugmentPromptWithAttachments(prompt, params)
 
 	if syncedProvider, ok := externalProviderFromParams(params); ok {
 		response, err := s.runSingleAgentViaExternalProvider(
@@ -814,56 +811,21 @@ func (s *Server) runSingleAgent(
 		}
 	}
 
-	output, err := shared.RunProviderCommand(
-		ctx,
-		provider,
-		model,
-		prompt,
-		workingDirectory,
-	)
-	if err != nil {
-		s.emitSessionUpdate(session, notify, turnID, map[string]any{
-			"type":    "status",
-			"event":   "completed",
-			"message": err.Error(),
-			"pending": false,
-			"error":   true,
-		})
-		return taskResult{
-			response: map[string]any{
-				"success":  false,
-				"error":    err.Error(),
-				"turnId":   turnID,
-				"mode":     "single-agent",
-				"provider": provider,
-			},
-		}
-	}
-
-	s.emitSessionUpdate(session, notify, turnID, map[string]any{
-		"type":    "delta",
-		"delta":   output,
-		"pending": false,
-		"error":   false,
-	})
-
 	s.emitSessionUpdate(session, notify, turnID, map[string]any{
 		"type":    "status",
 		"event":   "completed",
-		"message": "single-agent completed",
+		"message": "provider is not advertised by the bridge",
 		"pending": false,
-		"error":   false,
+		"error":   true,
 	})
-
 	return taskResult{
-		response: enrichSingleAgentResultArtifacts(map[string]any{
-			"success":                   true,
-			"output":                    output,
-			"turnId":                    turnID,
-			"mode":                      "single-agent",
-			"provider":                  provider,
-			"effectiveWorkingDirectory": effectiveWorkingDirectory,
-		}, params),
+		response: map[string]any{
+			"success":  false,
+			"error":    "provider is not advertised by the bridge",
+			"turnId":   turnID,
+			"mode":     "single-agent",
+			"provider": provider,
+		},
 	}
 }
 

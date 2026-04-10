@@ -299,16 +299,7 @@ func TestExecuteSessionTaskExplicitRoutingDoesNotRecordProjectMemory(t *testing.
 	}
 }
 
-func TestExecuteSessionTaskExplicitProviderUsesAutodetectedLocalProvider(t *testing.T) {
-	fakeClaude := filepath.Join(t.TempDir(), "claude")
-	if err := os.WriteFile(fakeClaude, []byte("#!/bin/sh\nprintf 'autodetected-provider-ok\\n'"), 0o755); err != nil {
-		t.Fatalf("write fake claude: %v", err)
-	}
-	t.Setenv("ACP_CLAUDE_BIN", fakeClaude)
-	t.Setenv("ACP_CODEX_BIN", "")
-	t.Setenv("ACP_GEMINI_BIN", "")
-	t.Setenv("ACP_OPENCODE_BIN", "")
-
+func TestExecuteSessionTaskExplicitProviderRequiresAdvertisedBridgeProvider(t *testing.T) {
 	server := NewServer()
 	response, rpcErr := server.executeSessionTask(task{
 		req: shared.RPCRequest{
@@ -328,14 +319,11 @@ func TestExecuteSessionTaskExplicitProviderUsesAutodetectedLocalProvider(t *test
 	if rpcErr != nil {
 		t.Fatalf("expected structured response, got rpc error: %v", rpcErr)
 	}
-	if success, _ := response["success"].(bool); !success {
-		t.Fatalf("expected success response, got %#v", response)
+	if success, _ := response["success"].(bool); success {
+		t.Fatalf("expected unavailable response, got %#v", response)
 	}
-	if got := response["provider"]; got != "claude" {
-		t.Fatalf("expected claude provider, got %#v", response)
-	}
-	if got := response["output"]; got != "autodetected-provider-ok" {
-		t.Fatalf("expected autodetected provider output, got %#v", response)
+	if got := response["unavailableCode"]; got != "PROVIDER_UNAVAILABLE" {
+		t.Fatalf("expected PROVIDER_UNAVAILABLE, got %#v", response)
 	}
 }
 

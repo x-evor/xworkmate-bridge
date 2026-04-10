@@ -13,38 +13,6 @@ import (
 	"xworkmate-bridge/internal/shared"
 )
 
-func TestCapabilitiesIgnoreLocalProviderAutodetectUntilSync(t *testing.T) {
-	fakeProvider := t.TempDir() + "/fake-claude"
-	if err := os.WriteFile(fakeProvider, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatalf("write fake provider: %v", err)
-	}
-	t.Setenv("ACP_CLAUDE_BIN", fakeProvider)
-	t.Setenv("ACP_CODEX_BIN", "")
-	t.Setenv("ACP_GEMINI_BIN", "")
-	t.Setenv("ACP_OPENCODE_BIN", "")
-
-	server := NewServer()
-	result, rpcErr := server.handleRequest(shared.RPCRequest{
-		Method: "acp.capabilities",
-		Params: map[string]any{},
-	}, func(map[string]any) {})
-	if rpcErr != nil {
-		t.Fatalf("expected capabilities success, got %v", rpcErr)
-	}
-
-	providers, _ := result["providers"].([]string)
-	found := false
-	for _, provider := range providers {
-		if provider == "claude" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected autodetected local provider before sync, got %#v", providers)
-	}
-}
-
 func TestProvidersSyncUpdatesCapabilities(t *testing.T) {
 	server := NewServer()
 
@@ -324,15 +292,7 @@ func TestRunSingleAgentUsesFrozenExternalProviderParams(t *testing.T) {
 	}
 }
 
-func TestRunSingleAgentFallsBackWorkingDirectoryToHome(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	fakeOpencode := filepath.Join(t.TempDir(), "opencode")
-	if err := os.WriteFile(fakeOpencode, []byte("#!/bin/sh\necho local-ok\n"), 0o755); err != nil {
-		t.Fatalf("write fake opencode: %v", err)
-	}
-	t.Setenv("ACP_OPENCODE_BIN", fakeOpencode)
-
+func TestRunSingleAgentRequiresAdvertisedProvider(t *testing.T) {
 	server := NewServer()
 	session := server.getOrCreateSession("session-local", "thread-local")
 	result := server.runSingleAgent(
@@ -348,13 +308,13 @@ func TestRunSingleAgentFallsBackWorkingDirectoryToHome(t *testing.T) {
 		func(map[string]any) {},
 	)
 	if result.err != nil {
-		t.Fatalf("expected success, got rpc error: %v", result.err)
+		t.Fatalf("expected structured response, got rpc error: %v", result.err)
 	}
-	if got := result.response["output"]; got != "local-ok" {
-		t.Fatalf("expected local provider output, got %#v", result.response)
+	if success, _ := result.response["success"].(bool); success {
+		t.Fatalf("expected unavailable response, got %#v", result.response)
 	}
-	if got := result.response["effectiveWorkingDirectory"]; got != home {
-		t.Fatalf("expected effectiveWorkingDirectory %q, got %#v", home, got)
+	if got := result.response["error"]; got != "provider is not advertised by the bridge" {
+		t.Fatalf("expected provider unavailable error, got %#v", result.response)
 	}
 }
 

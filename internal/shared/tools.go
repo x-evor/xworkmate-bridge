@@ -10,35 +10,9 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"sort"
 	"strings"
 	"time"
 )
-
-func DetectACPProviders() []string {
-	candidates := []struct {
-		provider string
-		envKey   string
-		binary   string
-	}{
-		{provider: "codex", envKey: "ACP_CODEX_BIN", binary: "codex"},
-		{provider: "opencode", envKey: "ACP_OPENCODE_BIN", binary: "opencode"},
-		{provider: "claude", envKey: "ACP_CLAUDE_BIN", binary: "claude"},
-		{provider: "gemini", envKey: "ACP_GEMINI_BIN", binary: "gemini"},
-	}
-	providers := make([]string, 0, len(candidates))
-	for _, candidate := range candidates {
-		binary := strings.TrimSpace(EnvOrDefault(candidate.envKey, candidate.binary))
-		if binary == "" {
-			continue
-		}
-		if _, err := exec.LookPath(binary); err == nil {
-			providers = append(providers, candidate.provider)
-		}
-	}
-	sort.Strings(providers)
-	return providers
-}
 
 func RunProviderCommand(
 	ctx context.Context,
