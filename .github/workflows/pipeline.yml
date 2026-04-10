@@ -175,9 +175,11 @@ jobs:
     if: ${{ needs.deploy.result == 'success' && needs.deploy.outputs.run_apply == 'true' }}
     runs-on: ubuntu-latest
     env:
-      BRIDGE_SERVER_URL: ${{ vars.BRIDGE_SERVER_URL || 'https://xworkmate-bridge.svc.plus' }}
-      ACP_INGRESS_URL: ${{ vars.ACP_INGRESS_URL || 'https://acp-server.svc.plus' }}
-      OPENCLAW_URL: ${{ vars.OPENCLAW_URL || 'wss://openclaw.svc.plus' }}
+      BRIDGE_SERVER_URL: https://xworkmate-bridge.svc.plus
+      OPENCLAW_URL: wss://openclaw.svc.plus
+      CODEX_RPC_URL: https://acp-server.svc.plus/codex/acp/rpc
+      OPENCODE_RPC_URL: https://acp-server.svc.plus/opencode/acp/rpc
+      GEMINI_RPC_URL: https://acp-server.svc.plus/gemini/acp/rpc
       INTERNAL_SERVICE_TOKEN: ${{ secrets.INTERNAL_SERVICE_TOKEN }}
     steps:
       - name: Checkout

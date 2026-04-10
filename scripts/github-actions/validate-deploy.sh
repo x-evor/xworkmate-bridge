@@ -28,9 +28,11 @@ websocket_probe_url() {
 }
 
 BASE_URL="$(normalize_url "${BRIDGE_SERVER_URL:-${1:-https://xworkmate-bridge.svc.plus}}")"
-INGRESS_URL="$(normalize_url "${ACP_INGRESS_URL:-${2:-https://acp-server.svc.plus}}")"
-AUTH_TOKEN="${BRIDGE_AUTH_TOKEN:-${INTERNAL_SERVICE_TOKEN:-${3:-}}}"
-OPENCLAW_HTTP_PROBE_URL="$(websocket_probe_url "${OPENCLAW_URL:-${4:-wss://openclaw.svc.plus}}")"
+OPENCLAW_HTTP_PROBE_URL="$(websocket_probe_url "${OPENCLAW_URL:-${2:-wss://openclaw.svc.plus}}")"
+CODEX_RPC_URL="$(normalize_url "${CODEX_RPC_URL:-${3:-https://acp-server.svc.plus/codex/acp/rpc}}")"
+OPENCODE_RPC_URL="$(normalize_url "${OPENCODE_RPC_URL:-${4:-https://acp-server.svc.plus/opencode/acp/rpc}}")"
+GEMINI_RPC_URL="$(normalize_url "${GEMINI_RPC_URL:-${5:-https://acp-server.svc.plus/gemini/acp/rpc}}")"
+AUTH_TOKEN="${BRIDGE_AUTH_TOKEN:-${INTERNAL_SERVICE_TOKEN:-${6:-}}}"
 
 curl_common=(
   --silent
@@ -40,6 +42,11 @@ curl_common=(
   --max-time 20
 )
 
+auth_headers=()
+if [[ -n "${AUTH_TOKEN}" ]]; then
+  auth_headers+=(-H "Authorization: Bearer ${AUTH_TOKEN}")
+fi
+
 probe_jsonrpc_capabilities() {
   local endpoint="$1"
   local response
@@ -47,9 +54,7 @@ probe_jsonrpc_capabilities() {
     -H 'Content-Type: application/json'
   )
 
-  if [[ -n "${AUTH_TOKEN}" ]]; then
-    headers+=(-H "Authorization: Bearer ${AUTH_TOKEN}")
-  fi
+  headers+=("${auth_headers[@]}")
 
   response="$(
     curl "${curl_common[@]}" \
@@ -73,6 +78,7 @@ probe_safe_http_endpoint() {
       --write-out '%{http_code}' \
       --location \
       --max-time 20 \
+      "${auth_headers[@]}" \
       "${endpoint}"
   )"
 
@@ -87,10 +93,10 @@ probe_safe_http_endpoint() {
   esac
 }
 
-bridge_root="$(curl "${curl_common[@]}" "${BASE_URL}/")"
+bridge_root="$(curl "${curl_common[@]}" "${auth_headers[@]}" "${BASE_URL}/")"
 grep -qi 'xworkmate-bridge' <<<"${bridge_root}"
 
 probe_safe_http_endpoint "${OPENCLAW_HTTP_PROBE_URL}"
-probe_jsonrpc_capabilities "${INGRESS_URL}/codex/acp/rpc"
-probe_jsonrpc_capabilities "${INGRESS_URL}/opencode/acp/rpc"
-probe_jsonrpc_capabilities "${INGRESS_URL}/gemini/acp/rpc"
+probe_jsonrpc_capabilities "${CODEX_RPC_URL}"
+probe_jsonrpc_capabilities "${OPENCODE_RPC_URL}"
+probe_jsonrpc_capabilities "${GEMINI_RPC_URL}"
