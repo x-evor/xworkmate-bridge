@@ -124,7 +124,9 @@ func consumeBootstrapFromAccounts(req bridgeBootstrapConsumeRequest) (accountsBr
 	if err != nil {
 		return accountsBridgeBootstrapConsumeResponse{}, http.StatusBadGateway, fmt.Errorf("failed to contact accounts service")
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return accountsBridgeBootstrapConsumeResponse{}, resp.StatusCode, fmt.Errorf("accounts bootstrap consume failed")
 	}

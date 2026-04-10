@@ -29,6 +29,37 @@ make build
 ./build/bin/xworkmate-go-core serve --listen 127.0.0.1:8787
 ```
 
+## GitHub Actions
+
+This repository includes one GitHub Actions pipeline with four stages:
+
+- `prep`: Go static checks
+- `build`: build the `linux/amd64` artifact for the x86 target host and upload it
+- `deploy`: run Ansible CD with `x-evor/playbooks`
+- `validate`: verify the public endpoints after deployment
+
+### Deploy stage
+
+The deploy stage checks out:
+
+- this service repository into `xworkmate-bridge/`
+- the `x-evor/playbooks` repository into `playbooks/`
+
+Then it runs `playbooks/deploy_xworkmate_bridge_vhosts.yml`, which builds the service for `linux/amd64` and deploys it to the target host with Ansible.
+
+Required GitHub secrets:
+
+- `SINGLE_NODE_VPS_SSH_PRIVATE_KEY`: private key used by the Actions runner to SSH into the target host
+- `WORKSPACE_REPO_TOKEN`: token with access to checkout `x-evor/playbooks`
+
+Optional GitHub secrets:
+
+- `SSH_KNOWN_HOSTS`: pre-seeded known_hosts content for stricter host verification
+
+Optional workflow input:
+
+- `internal_service_token`: manual dispatch input that is forwarded to Ansible as `INTERNAL_SERVICE_TOKEN`
+
 ## Environment
 
 - `ACP_LISTEN_ADDR`: listen address for `serve` mode, default `127.0.0.1:8787`

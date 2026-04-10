@@ -198,7 +198,9 @@ func newFakeGatewayServer(t *testing.T) *fakeGatewayServer {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() {
+			_ = conn.Close()
+		}()
 		_ = conn.WriteJSON(map[string]any{
 			"type":  "event",
 			"event": "connect.challenge",

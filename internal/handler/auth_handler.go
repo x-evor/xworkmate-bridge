@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -45,5 +46,5 @@ type authServiceAdapter struct {
 }
 
 func (a authServiceAdapter) Authenticate(username, password string) error {
-	return a.service.Authenticate(nil, username, password)
+	return a.service.Authenticate(context.TODO(), username, password)
 }

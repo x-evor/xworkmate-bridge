@@ -77,7 +77,9 @@ func Serve(args []string) error {
 		nil,
 		shared.IntArg(shared.EnvOrDefault("GEMINI_ADAPTER_PROTOCOL_VERSION", "1"), 1),
 	)
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	server := NewServer(client)
 	httpServer := &http.Server{
@@ -140,7 +142,9 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	var writeMu sync.Mutex
 	notify := func(message map[string]any) {

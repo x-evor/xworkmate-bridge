@@ -210,7 +210,7 @@ func ComposeHistoryPrompt(history []string) string {
 	}
 	var builder strings.Builder
 	for index, turn := range history {
-		builder.WriteString(fmt.Sprintf("## User Turn %d\n", index+1))
+		_, _ = fmt.Fprintf(&builder, "## User Turn %d\n", index+1)
 		builder.WriteString(turn)
 		builder.WriteString("\n\n")
 	}
@@ -248,7 +248,9 @@ func CallOpenAICompatibleCtx(
 	if err != nil {
 		return "", err
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
 		return "", err
@@ -356,7 +358,7 @@ func RunClaudeReview(
 	claudeBin := strings.TrimSpace(EnvOrDefault("CLAUDE_BIN", "claude"))
 	resolved, err := exec.LookPath(claudeBin)
 	if err != nil {
-		return "", fmt.Errorf("Claude CLI not found: %s", claudeBin)
+		return "", fmt.Errorf("claude CLI not found: %s", claudeBin)
 	}
 
 	args := []string{
@@ -389,13 +391,13 @@ func RunClaudeReview(
 
 	if err := cmd.Run(); err != nil {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return "", fmt.Errorf("Claude review timed out after %s", timeout)
+			return "", fmt.Errorf("claude review timed out after %s", timeout)
 		}
 		message := strings.TrimSpace(stderr.String())
 		if message == "" {
 			message = err.Error()
 		}
-		return "", fmt.Errorf("Claude review failed: %s", message)
+		return "", fmt.Errorf("claude review failed: %s", message)
 	}
 
 	payload, err := ParseClaudeJSON(stdout.String())
@@ -411,7 +413,7 @@ func RunClaudeReview(
 	}
 	response := strings.TrimSpace(fmt.Sprint(payload["result"]))
 	if response == "" || response == "<nil>" {
-		return "", errors.New("Claude review returned empty output")
+		return "", errors.New("claude review returned empty output")
 	}
 	return response, nil
 }
@@ -428,5 +430,5 @@ func ParseClaudeJSON(raw string) (map[string]any, error) {
 			return payload, nil
 		}
 	}
-	return nil, errors.New("Claude CLI did not return JSON output")
+	return nil, errors.New("claude CLI did not return JSON output")
 }

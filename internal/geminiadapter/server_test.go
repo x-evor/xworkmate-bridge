@@ -227,7 +227,9 @@ func TestHandleWebSocketCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial websocket: %v", err)
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	if err := conn.WriteJSON(shared.RPCRequest{
 		JSONRPC: "2.0",

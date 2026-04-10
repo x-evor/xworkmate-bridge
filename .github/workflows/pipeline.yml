@@ -1,0 +1,163 @@
+name: Pipeline
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_host:
+        description: "Ansible inventory host or alias"
+        required: false
+        default: "jp-xhttp-contabo.svc.plus"
+        type: string
+      run_apply:
+        description: "Apply deployment (false = dry-run)"
+        required: true
+        default: true
+        type: boolean
+      internal_service_token:
+        description: "Optional ACP auth token for deploy"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DEFAULT_TARGET_HOST: jp-xhttp-contabo.svc.plus
+
+jobs:
+  prep:
+    name: Prep
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+
+      - name: Run Go static checks
+        run: bash ./scripts/github-actions/prep.sh
+
+  build:
+    name: Build
+    needs: prep
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build x86 artifact
+        run: bash ./scripts/github-actions/build-artifact.sh dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xworkmate-bridge-linux-amd64
+          path: dist/xworkmate-bridge
+
+  deploy:
+    name: Deploy
+    needs: build
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    outputs:
+      run_apply: ${{ steps.deploy_meta.outputs.run_apply }}
+    env:
+      INTERNAL_SERVICE_TOKEN: ${{ github.event_name == 'workflow_dispatch' && inputs.internal_service_token || secrets.INTERNAL_SERVICE_TOKEN }}
+    steps:
+      - name: Checkout service repository
+        uses: actions/checkout@v4
+        with:
+          path: xworkmate-bridge
+
+      - name: Checkout playbooks repository
+        uses: actions/checkout@v4
+        with:
+          repository: x-evor/playbooks
+          token: ${{ secrets.WORKSPACE_REPO_TOKEN || github.token }}
+          path: playbooks
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: xworkmate-bridge/go.mod
+          cache: true
+          cache-dependency-path: xworkmate-bridge/go.sum
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ansible runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "ansible-core==2.18.3"
+
+      - name: Resolve deployment settings
+        id: deploy_meta
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            target_host="${{ inputs.target_host }}"
+            run_apply="${{ inputs.run_apply }}"
+          else
+            target_host="${DEFAULT_TARGET_HOST}"
+            run_apply="true"
+          fi
+
+          if [[ -z "${target_host}" ]]; then
+            target_host="${DEFAULT_TARGET_HOST}"
+          fi
+
+          echo "target_host=${target_host}" >> "$GITHUB_OUTPUT"
+          echo "run_apply=${run_apply}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare runner SSH access
+        working-directory: xworkmate-bridge
+        env:
+          SINGLE_NODE_VPS_SSH_PRIVATE_KEY: ${{ secrets.SINGLE_NODE_VPS_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: bash ./scripts/github-actions/prepare-ssh.sh "${{ steps.deploy_meta.outputs.target_host }}" "${SSH_KNOWN_HOSTS}"
+
+      - name: Run Ansible deploy playbook
+        working-directory: xworkmate-bridge
+        run: bash ./scripts/github-actions/deploy.sh "${{ steps.deploy_meta.outputs.target_host }}" "${{ steps.deploy_meta.outputs.run_apply }}" ../playbooks
+
+  validate:
+    name: Validate
+    needs: deploy
+    if: ${{ needs.deploy.result == 'success' && needs.deploy.outputs.run_apply == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployed endpoints
+        run: bash ./scripts/github-actions/validate-deploy.sh

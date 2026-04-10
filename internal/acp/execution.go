@@ -301,7 +301,9 @@ func requestExternalACPHTTP(
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	var decoded map[string]any
 	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
 		return nil, err
@@ -594,7 +596,9 @@ func requestExternalACPWebSocket(
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	requestID := fmt.Sprintf("req-%d", time.Now().UnixNano())
 	if err := conn.WriteJSON(map[string]any{
@@ -679,9 +683,10 @@ func (u *urlSpec) basePath() string {
 
 func (u *urlSpec) httpRPCEndpoint() string {
 	scheme := u.Scheme
-	if scheme == "ws" {
+	switch scheme {
+	case "ws":
 		scheme = "http"
-	} else if scheme == "wss" {
+	case "wss":
 		scheme = "https"
 	}
 	basePath := u.basePath()
@@ -695,9 +700,10 @@ func (u *urlSpec) httpRPCEndpoint() string {
 
 func (u *urlSpec) webSocketEndpoint() string {
 	scheme := u.Scheme
-	if scheme == "http" {
+	switch scheme {
+	case "http":
 		scheme = "ws"
-	} else if scheme == "https" {
+	case "https":
 		scheme = "wss"
 	}
 	basePath := u.basePath()

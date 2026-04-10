@@ -96,7 +96,9 @@ func TestExecuteSessionTaskUsesSyncedExternalProvider(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		defer r.Body.Close()
+		defer func() {
+			_ = r.Body.Close()
+		}()
 		var request map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatalf("decode request: %v", err)
@@ -188,7 +190,9 @@ func TestExecuteSessionTaskEnrichesExternalProviderResultWithArtifactsAndRemoteM
 			http.NotFound(w, r)
 			return
 		}
-		defer r.Body.Close()
+		defer func() {
+			_ = r.Body.Close()
+		}()
 		var request map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatalf("decode request: %v", err)
@@ -274,7 +278,9 @@ func TestRunSingleAgentUsesFrozenExternalProviderParams(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		defer r.Body.Close()
+		defer func() {
+			_ = r.Body.Close()
+		}()
 		var request map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatalf("decode request: %v", err)

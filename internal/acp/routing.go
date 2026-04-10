@@ -15,10 +15,6 @@ func handleRoutingResolve(params map[string]any) map[string]any {
 	return mergeRoutingResponse(map[string]any{"ok": true}, result)
 }
 
-func resolveRoutingMetadata(params map[string]any) (router.Result, bool) {
-	return resolveRoutingMetadataWithProviders(params, nil)
-}
-
 func resolveRoutingMetadataWithProviders(
 	params map[string]any,
 	availableProviders []string,
