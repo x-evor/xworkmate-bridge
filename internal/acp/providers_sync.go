@@ -1,7 +1,6 @@
 package acp
 
 import (
-	"sort"
 	"strings"
 )
 
@@ -40,11 +39,15 @@ func (s *Server) syncProviders(providers []syncedProvider) map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.providerCatalog = make(map[string]syncedProvider, len(providers))
+	s.providerOrder = make([]string, 0, len(providers))
 	for _, provider := range providers {
-		if strings.TrimSpace(provider.ProviderID) == "" {
+		providerID := strings.TrimSpace(provider.ProviderID)
+		if providerID == "" {
 			continue
 		}
-		s.providerCatalog[provider.ProviderID] = provider
+		provider.ProviderID = providerID
+		s.providerCatalog[providerID] = provider
+		s.providerOrder = append(s.providerOrder, providerID)
 	}
 	return map[string]any{
 		"ok":        true,
@@ -63,21 +66,40 @@ func (s *Server) syncedProviderByID(providerID string) (syncedProvider, bool) {
 }
 
 func (s *Server) availableProviders() []string {
-	providers := make(map[string]struct{})
 	s.mu.Lock()
-	for _, provider := range s.providerCatalog {
+	defer s.mu.Unlock()
+	ordered := make([]string, 0, len(s.providerOrder))
+	for _, providerID := range s.providerOrder {
+		provider, ok := s.providerCatalog[providerID]
+		if !ok {
+			continue
+		}
 		if !provider.Enabled || strings.TrimSpace(provider.Endpoint) == "" {
 			continue
 		}
-		providers[provider.ProviderID] = struct{}{}
+		ordered = append(ordered, provider.ProviderID)
 	}
-	s.mu.Unlock()
-	ordered := make([]string, 0, len(providers))
-	for providerID := range providers {
-		ordered = append(ordered, providerID)
-	}
-	sort.Strings(ordered)
 	return ordered
+}
+
+func (s *Server) availableProviderCatalog() []map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := make([]map[string]any, 0, len(s.providerOrder))
+	for _, providerID := range s.providerOrder {
+		provider, ok := s.providerCatalog[providerID]
+		if !ok {
+			continue
+		}
+		if !provider.Enabled || strings.TrimSpace(provider.Endpoint) == "" {
+			continue
+		}
+		result = append(result, map[string]any{
+			"providerId": provider.ProviderID,
+			"label":      providerLabel(provider),
+		})
+	}
+	return result
 }
 
 func syncedProvidersResult(providers []syncedProvider) []map[string]any {
@@ -85,10 +107,17 @@ func syncedProvidersResult(providers []syncedProvider) []map[string]any {
 	for _, provider := range providers {
 		result = append(result, map[string]any{
 			"providerId": provider.ProviderID,
-			"label":      provider.Label,
+			"label":      providerLabel(provider),
 			"endpoint":   provider.Endpoint,
 			"enabled":    provider.Enabled,
 		})
 	}
 	return result
+}
+
+func providerLabel(provider syncedProvider) string {
+	if label := strings.TrimSpace(provider.Label); label != "" {
+		return label
+	}
+	return provider.ProviderID
 }

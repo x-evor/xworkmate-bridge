@@ -117,11 +117,19 @@ Response shape:
   "result": {
     "singleAgent": true,
     "multiAgent": true,
-    "providers": ["codex", "gemini", "opencode"],
+    "providerCatalog": [
+      { "providerId": "codex", "label": "Codex" },
+      { "providerId": "gemini", "label": "Gemini" },
+      { "providerId": "opencode", "label": "OpenCode" }
+    ],
     "capabilities": {
       "single_agent": true,
       "multi_agent": true,
-      "providers": ["codex", "gemini", "opencode"]
+      "providerCatalog": [
+        { "providerId": "codex", "label": "Codex" },
+        { "providerId": "gemini", "label": "Gemini" },
+        { "providerId": "opencode", "label": "OpenCode" }
+      ]
     }
   }
 }
@@ -129,8 +137,9 @@ Response shape:
 
 Notes:
 
-- `providers` comes from the synced external provider catalog registered through
-  `xworkmate.providers.sync`
+- `providerCatalog` comes from the synced external provider catalog registered
+  through `xworkmate.providers.sync`
+- provider order is bridge-owned and preserves the sync order
 - `multiAgent` is controlled by `ACP_MULTI_AGENT_ENABLED`, default `true`
 
 ### 3.2 `session.start`
@@ -292,6 +301,15 @@ Purpose:
   - model
   - selected skills
   - install suggestion / unavailable state
+
+Canonical use:
+
+- apps should use this method as the single preflight source for:
+  - effective execution target
+  - effective provider selection
+  - unavailable code / message
+- apps should not re-derive provider availability or `auto` resolution from
+  `acp.capabilities`
 
 Key input fields:
 

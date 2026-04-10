@@ -2,7 +2,6 @@ package router
 
 import (
 	"os"
-	"sort"
 	"strings"
 
 	"xworkmate-bridge/internal/memory"
@@ -267,7 +266,6 @@ func normalizeProviders(values []string) []string {
 		unique[providerID] = struct{}{}
 		normalized = append(normalized, providerID)
 	}
-	sort.Strings(normalized)
 	return normalized
 }
 
