@@ -148,7 +148,7 @@ func (s *Server) runSingleAgentViaExternalProvider(
 	params map[string]any,
 	notify func(map[string]any),
 ) (map[string]any, error) {
-	endpoint := strings.TrimSpace(provider.Endpoint)
+	endpoint := resolveSingleAgentForwardEndpoint(provider)
 	if endpoint == "" {
 		return nil, fmt.Errorf("external provider endpoint is missing")
 	}
@@ -161,6 +161,21 @@ func (s *Server) runSingleAgentViaExternalProvider(
 		forwardParams,
 		notify,
 	)
+}
+
+func resolveSingleAgentForwardEndpoint(provider syncedProvider) string {
+	endpoint := strings.TrimSpace(provider.Endpoint)
+	if endpoint == "" {
+		return ""
+	}
+	if !strings.Contains(strings.ToLower(endpoint), "xworkmate-bridge.svc.plus") {
+		return endpoint
+	}
+	providerID := strings.TrimSpace(strings.ToLower(provider.ProviderID))
+	if providerID == "" {
+		return endpoint
+	}
+	return fmt.Sprintf("https://acp-server.svc.plus/%s/acp/rpc", providerID)
 }
 
 func sanitizeExternalACPParams(method string, params map[string]any) map[string]any {
@@ -259,8 +274,8 @@ func requestExternalACPHTTP(
 	}
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	req.Header.Set("Accept", "application/json")
-	if strings.TrimSpace(authorization) != "" {
-		req.Header.Set("Authorization", strings.TrimSpace(authorization))
+	if normalized := normalizeAuthorizationHeader(authorization); normalized != "" {
+		req.Header.Set("Authorization", normalized)
 	}
 	response, err := (&http.Client{Timeout: 2 * time.Minute}).Do(req)
 	if err != nil {
@@ -278,6 +293,17 @@ func requestExternalACPHTTP(
 		)
 	}
 	return decoded, nil
+}
+
+func normalizeAuthorizationHeader(raw string) string {
+	normalized := strings.TrimSpace(raw)
+	if normalized == "" {
+		return ""
+	}
+	if strings.Contains(normalized, " ") {
+		return normalized
+	}
+	return "Bearer " + normalized
 }
 
 func requestExternalACPWebSocket(
