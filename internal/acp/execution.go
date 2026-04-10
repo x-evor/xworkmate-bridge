@@ -232,22 +232,14 @@ func externalProviderFromParams(params map[string]any) (syncedProvider, bool) {
 		return syncedProvider{}, false
 	}
 	return syncedProvider{
-		ProviderID:          strings.TrimSpace(shared.StringArg(params, "provider", "")),
-		Label:               strings.TrimSpace(shared.StringArg(params, externalProviderLabelKey, "")),
-		Endpoint:            endpoint,
-		AuthorizationHeader: fallbackAuthorizationHeader(
-			strings.TrimSpace(shared.StringArg(params, externalProviderAuthorizationHeaderKey, "")),
-			strings.TrimSpace(shared.StringArg(params, inboundAuthorizationHeaderKey, "")),
+		ProviderID: strings.TrimSpace(shared.StringArg(params, "provider", "")),
+		Label:      strings.TrimSpace(shared.StringArg(params, externalProviderLabelKey, "")),
+		Endpoint:   endpoint,
+		AuthorizationHeader: strings.TrimSpace(
+			shared.StringArg(params, externalProviderAuthorizationHeaderKey, ""),
 		),
-		Enabled:             true,
+		Enabled: true,
 	}, true
-}
-
-func fallbackAuthorizationHeader(explicit, inbound string) string {
-	if strings.TrimSpace(explicit) != "" {
-		return strings.TrimSpace(explicit)
-	}
-	return strings.TrimSpace(inbound)
 }
 
 func requestExternalACP(

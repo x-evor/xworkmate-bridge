@@ -201,11 +201,11 @@ func TestExecuteSessionTaskEnrichesExternalProviderResultWithArtifactsAndRemoteM
 			"jsonrpc": "2.0",
 			"id":      request["id"],
 			"result": map[string]any{
-				"success":                true,
-				"output":                 "external-provider-ok",
-				"turnId":                 "turn-external-artifacts",
-				"provider":               "claude",
-				"mode":                   "single-agent",
+				"success":                  true,
+				"output":                   "external-provider-ok",
+				"turnId":                   "turn-external-artifacts",
+				"provider":                 "claude",
+				"mode":                     "single-agent",
 				"resolvedWorkingDirectory": "/remote/threads/task-42",
 				"resolvedWorkspaceRefKind": "remotePath",
 			},
@@ -358,10 +358,10 @@ func TestRunSingleAgentFallsBackWorkingDirectoryToHome(t *testing.T) {
 	}
 }
 
-func TestHandleRPCForwardsInboundBearerToExternalProvider(t *testing.T) {
+func TestHandleRPCRequiresExplicitBearerForExternalProvider(t *testing.T) {
 	externalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "Bearer bridge-token" {
-			t.Fatalf("expected forwarded bearer header, got %q", got)
+		if got := r.Header.Get("Authorization"); got != "Bearer synced-provider-token" {
+			t.Fatalf("expected explicit synced provider bearer header, got %q", got)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"jsonrpc": "2.0",
@@ -376,10 +376,11 @@ func TestHandleRPCForwardsInboundBearerToExternalProvider(t *testing.T) {
 
 	server := NewServer()
 	server.syncProviders([]syncedProvider{{
-		ProviderID: "codex",
-		Label:      "Codex",
-		Endpoint:   externalServer.URL,
-		Enabled:    true,
+		ProviderID:          "codex",
+		Label:               "Codex",
+		Endpoint:            externalServer.URL,
+		AuthorizationHeader: "Bearer synced-provider-token",
+		Enabled:             true,
 	}})
 
 	recorder := httptest.NewRecorder()
