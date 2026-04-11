@@ -264,6 +264,13 @@ Response:
 }
 ```
 
+Notes:
+
+- `accepted` indicates the request envelope was accepted
+- `cancelled` is `true` only when an active session was actually cancelled
+- if the session does not exist or is already finished, `cancelled` may be
+  `false`
+
 ### 3.5 `session.close`
 
 Request:
@@ -287,6 +294,12 @@ Response:
   "closed": true
 }
 ```
+
+Notes:
+
+- `accepted` indicates the request envelope was accepted
+- `closed` is `true` only when an existing session state was actually closed
+- if the session does not exist or is already gone, `closed` may be `false`
 
 ### 3.6 `xworkmate.dispatch.resolve`
 
@@ -342,7 +355,6 @@ Key input fields:
 - `workingDirectory`
 - `routing.routingMode`
 - `routing.preferredGatewayProviderId`
-- `routing.preferredGatewayTarget`
 - `routing.explicitExecutionTarget`
 - `routing.explicitProviderId`
 - `routing.explicitModel`
@@ -358,7 +370,6 @@ Representative response fields:
 - `resolvedExecutionTarget`
 - `resolvedProviderId`
 - `resolvedGatewayProviderId`
-- `resolvedEndpointTarget`
 - `resolvedModel`
 - `resolvedSkills`
 - `skillResolutionSource`
@@ -374,8 +385,6 @@ APP-facing interpretation:
 
 - if `resolvedExecutionTarget = single-agent`, use `resolvedProviderId`
 - if `resolvedExecutionTarget = gateway`, use `resolvedGatewayProviderId`
-- `resolvedEndpointTarget` is retained as a compatibility field for bridge
-  internals; APP code should prefer `resolvedGatewayProviderId`
 
 ### 3.7.1 UI / APP consumption model
 
@@ -412,21 +421,12 @@ Recommended interpretation rules:
   - read `resolvedGatewayProviderId`
   - ignore `resolvedProviderId`
 
-Compatibility rule:
-
-- `resolvedEndpointTarget` is a compatibility field
-- APP code should not use `local` / `remote` as its primary business model
-- current bridge mapping is:
-  - `resolvedGatewayProviderId = local` -> `resolvedEndpointTarget = local`
-  - `resolvedGatewayProviderId = openclaw` -> `resolvedEndpointTarget = remote`
-
 UI binding guidance:
 
 - provider picker for single-agent mode should be populated from
   `providerCatalog`
 - gateway picker should be populated from `gatewayProviders`
 - gateway UI should display `local` and `openclaw` as selectable providers
-  rather than exposing transport-level `local` / `remote` terminology
 - disabled or unavailable states should come from `xworkmate.routing.resolve`
   response fields such as:
   - `unavailable`
@@ -482,7 +482,7 @@ Purpose:
 Key params:
 
 - `runtimeId`
-- `mode`
+- `gatewayProviderId`
 - `clientId`
 - `locale`
 - `userAgent`
@@ -509,8 +509,10 @@ Response fields:
 
 Notes:
 
-- for `mode=remote`, the bridge overrides runtime endpoint selection to
-  `wss://openclaw.svc.plus`
+- for `gatewayProviderId=openclaw`, the bridge overrides runtime endpoint
+  selection to `wss://openclaw.svc.plus`
+- for `gatewayProviderId=local`, the bridge keeps the caller-provided local
+  gateway endpoint configuration
 - upstream gateway auth uses `Authorization: Bearer $INTERNAL_SERVICE_TOKEN`
 - the app does not provide production openclaw endpoint truth
 
@@ -556,6 +558,13 @@ Differences from HTTP:
 - each inbound message is a JSON-RPC request frame
 - notifications are written back as WebSocket JSON messages
 - result envelopes and error envelopes are also written as WebSocket JSON messages
+
+Observed bridge behavior on the public deployment:
+
+- authenticated plain `GET /acp` without WebSocket upgrade headers returns HTTP
+  `400 Bad Request`
+- authenticated `GET /acp` with valid WebSocket upgrade headers returns HTTP
+  `101 Switching Protocols`
 
 ## 5. Gemini ACP Adapter API
 

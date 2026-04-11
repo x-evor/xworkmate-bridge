@@ -35,7 +35,6 @@ func buildResolvedExecutionParams(
 	switch resolved.ResolvedExecutionTarget {
 	case router.ExecutionTargetGateway:
 		next["mode"] = router.ExecutionTargetGatewayChat
-		next["executionTarget"] = resolved.ResolvedEndpointTarget
 	case router.ExecutionTargetMultiAgent:
 		next["mode"] = router.ExecutionTargetMultiAgent
 	default:
@@ -54,7 +53,6 @@ func buildResolvedExecutionParams(
 		next["selectedSkills"] = append([]string(nil), resolved.ResolvedSkills...)
 	}
 	next["resolvedExecutionTarget"] = resolved.ResolvedExecutionTarget
-	next["resolvedEndpointTarget"] = resolved.ResolvedEndpointTarget
 	next["resolvedProviderId"] = resolved.ResolvedProviderID
 	next["resolvedGatewayProviderId"] = resolved.ResolvedGatewayProviderID
 	next["resolvedModel"] = resolved.ResolvedModel
@@ -82,12 +80,12 @@ func (s *Server) runGateway(
 	notify func(map[string]any),
 ) taskResult {
 	_ = ctx
-	executionTarget := strings.TrimSpace(shared.StringArg(params, "executionTarget", ""))
-	if executionTarget == "" {
-		executionTarget = router.EndpointTargetLocal
+	gatewayProvider := strings.TrimSpace(shared.StringArg(params, "gatewayProvider", ""))
+	if gatewayProvider == "" {
+		gatewayProvider = router.GatewayProviderLocal
 	}
 	result := s.gateway.RequestByMode(
-		executionTarget,
+		gatewayProvider,
 		method,
 		params,
 		2*time.Minute,
@@ -180,7 +178,6 @@ func sanitizeExternalACPParams(method string, params map[string]any) map[string]
 	// Internal routing/runtime fields must not leak into external provider payloads.
 	delete(next, "metadata")
 	delete(next, "resolvedExecutionTarget")
-	delete(next, "resolvedEndpointTarget")
 	delete(next, "resolvedProviderId")
 	delete(next, "resolvedGatewayProviderId")
 	delete(next, "resolvedModel")

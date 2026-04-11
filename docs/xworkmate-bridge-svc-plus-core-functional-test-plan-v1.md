@@ -21,10 +21,9 @@
   - `resolvedExecutionTarget`
   - `resolvedProviderId`
   - `resolvedGatewayProviderId`
-  - `resolvedEndpointTarget`
 - `acp.capabilities` 暴露 bridge 内建的生产 provider catalog，并参与后续路由选择。
 - APP 对 gateway 的分区应以 `gatewayProviders` / `resolvedGatewayProviderId`
-  为主，不以 `local / remote` 传输语义为主。
+  为主。
 
 ### 2. 典型 Case 层
 
@@ -105,8 +104,6 @@ flutter test test/runtime/app_controller_single_agent_workspace_binding_regressi
 - bridge 还会暴露 `gatewayProviders = local / openclaw`。
 - `xworkmate.routing.resolve` 在 skill / prompt / target 组合下，返回合理的
   `resolvedProviderId` 或 `resolvedGatewayProviderId`。
-- `resolvedEndpointTarget` 仅作为兼容字段保留，APP 侧 gateway 分流以
-  `resolvedGatewayProviderId` 为主。
 
 ### 执行层断言
 

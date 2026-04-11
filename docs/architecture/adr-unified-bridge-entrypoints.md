@@ -64,8 +64,6 @@ APP-facing routing should be modeled in three layers:
   - `openclaw`
 
 For APP integration, `gatewayProviders` is the stable gateway-facing concept.
-The older `local` / `remote` endpoint-target split is retained only as a
-bridge-internal compatibility layer.
 
 APP and UI code should consume bridge state in two phases:
 
@@ -116,8 +114,6 @@ Use these terms consistently in docs:
 - `bridge-owned routing`: bridge logic that selects and proxies to upstreams
 - `gatewayProvider`: the APP-facing identifier for a gateway backend such as
   `local` or `openclaw`
-- `endpoint target`: an internal compatibility field, not the preferred APP
-  concept
 
 Avoid describing upstream URLs as if the APP should call them directly.
 

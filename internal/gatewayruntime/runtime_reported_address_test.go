@@ -16,7 +16,7 @@ func TestManagerConnectUsesReportedRemoteAddressInSnapshot(t *testing.T) {
 
 	result := manager.Connect(ConnectRequest{
 		RuntimeID: "runtime-1",
-		Mode:      "remote",
+		Mode:      "openclaw",
 		ClientID:  "openclaw-macos",
 		Locale:    "en_US",
 		UserAgent: "XWorkmate/1.0.0",

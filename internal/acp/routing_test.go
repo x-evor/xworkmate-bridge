@@ -138,9 +138,9 @@ func TestHandleRoutingResolveCoversNineScenarioBuckets(t *testing.T) {
 				"taskPrompt":       tc.prompt,
 				"workingDirectory": "/tmp/workspace",
 				"routing": map[string]any{
-					"routingMode":            "auto",
-					"preferredGatewayTarget": "local",
-					"allowSkillInstall":      false,
+					"routingMode":                "auto",
+					"preferredGatewayProviderId": "local",
+					"allowSkillInstall":          false,
 					"availableSkills": func() []any {
 						values := make([]any, 0, len(localAvailableSkills))
 						for _, item := range localAvailableSkills {
@@ -158,6 +158,9 @@ func TestHandleRoutingResolveCoversNineScenarioBuckets(t *testing.T) {
 				if got := result["resolvedGatewayProviderId"]; got != tc.expectedGatewayProviderID {
 					t.Fatalf("expected gateway provider %q, got %#v", tc.expectedGatewayProviderID, got)
 				}
+			}
+			if _, exists := result["resolvedEndpointTarget"]; exists {
+				t.Fatalf("expected resolvedEndpointTarget compatibility field to be removed, got %#v", result)
 			}
 			if got := result["skillResolutionSource"]; got != tc.expectedSkillSource {
 				t.Fatalf("expected skill source %q, got %#v", tc.expectedSkillSource, got)
@@ -202,8 +205,7 @@ func TestExecuteSessionTaskAutoRoutingRecordsProjectMemory(t *testing.T) {
 				"taskPrompt":       "create a powerpoint deck for launch",
 				"workingDirectory": workspaceDir,
 				"routing": map[string]any{
-					"routingMode":            "auto",
-					"preferredGatewayTarget": "local",
+					"routingMode": "auto",
 					"availableSkills": []any{
 						map[string]any{
 							"id":          "pptx",
@@ -373,8 +375,7 @@ func TestExecuteSessionTaskAutoRoutingUsesBridgeProductionProviderOrder(t *testi
 				"taskPrompt":       "create a powerpoint deck for launch",
 				"workingDirectory": workspaceDir,
 				"routing": map[string]any{
-					"routingMode":            "auto",
-					"preferredGatewayTarget": "local",
+					"routingMode": "auto",
 					"availableSkills": []any{
 						map[string]any{
 							"id":          "pptx",
@@ -442,8 +443,7 @@ func TestExecuteSessionTaskAutoRoutingPromotesComplexRequestToMultiAgent(t *test
 				"aiGatewayBaseUrl": aiGateway.URL,
 				"aiGatewayApiKey":  "test-key",
 				"routing": map[string]any{
-					"routingMode":            "auto",
-					"preferredGatewayTarget": "local",
+					"routingMode": "auto",
 				},
 			},
 		},

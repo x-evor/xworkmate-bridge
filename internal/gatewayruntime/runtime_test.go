@@ -303,7 +303,7 @@ func (f *fakeGatewayServer) Close() {
 func buildTestConnectRequest(port int) ConnectRequest {
 	return ConnectRequest{
 		RuntimeID: "runtime-1",
-		Mode:      "remote",
+		Mode:      "openclaw",
 		ClientID:  "openclaw-macos",
 		Locale:    "en_US",
 		UserAgent: "XWorkmate/1.0.0",

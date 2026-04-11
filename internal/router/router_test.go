@@ -32,9 +32,6 @@ func TestResolveExplicitTargetOverridesAuto(t *testing.T) {
 	if result.ResolvedExecutionTarget != ExecutionTargetSingleAgent {
 		t.Fatalf("expected explicit single-agent route, got %#v", result)
 	}
-	if result.ResolvedEndpointTarget != EndpointTargetSingleAgent {
-		t.Fatalf("expected singleAgent endpoint target, got %#v", result)
-	}
 	if result.ResolvedProviderID != "codex" || result.ResolvedModel != "gpt-5.4" {
 		t.Fatalf("unexpected explicit provider/model: %#v", result)
 	}
@@ -86,15 +83,12 @@ func TestResolveAutoOnlineTaskToGateway(t *testing.T) {
 	}
 
 	result := resolver.Resolve(Request{
-		Prompt:                 "跨浏览器执行并搜索最新资讯",
-		PreferredGatewayTarget: EndpointTargetLocal,
+		Prompt:                     "跨浏览器执行并搜索最新资讯",
+		PreferredGatewayProviderID: GatewayProviderLocal,
 	})
 
 	if result.ResolvedExecutionTarget != ExecutionTargetGateway {
 		t.Fatalf("expected gateway route, got %#v", result)
-	}
-	if result.ResolvedEndpointTarget != EndpointTargetLocal {
-		t.Fatalf("expected local gateway target, got %#v", result)
 	}
 	if result.ResolvedGatewayProviderID != GatewayProviderLocal {
 		t.Fatalf("expected local gateway provider, got %#v", result)
@@ -126,22 +120,19 @@ func TestResolveUsesClassifierForBoundarySamples(t *testing.T) {
 	}
 
 	result := resolver.Resolve(Request{
-		Prompt:                 "help me handle this ambiguous request",
-		PreferredGatewayTarget: EndpointTargetLocal,
+		Prompt:                     "help me handle this ambiguous request",
+		PreferredGatewayProviderID: GatewayProviderLocal,
 	})
 
 	if result.ResolvedExecutionTarget != ExecutionTargetGateway {
 		t.Fatalf("expected classifier to resolve gateway route, got %#v", result)
-	}
-	if result.ResolvedEndpointTarget != EndpointTargetLocal {
-		t.Fatalf("expected local endpoint target, got %#v", result)
 	}
 	if result.ResolvedGatewayProviderID != GatewayProviderLocal {
 		t.Fatalf("expected local gateway provider, got %#v", result)
 	}
 }
 
-func TestResolveGatewayProviderMapsOpenClawToRemoteEndpoint(t *testing.T) {
+func TestResolveGatewayProviderSelectsOpenClaw(t *testing.T) {
 	resolver := Resolver{
 		SkillFinder:    skills.StaticFinder{},
 		SkillInstaller: nil,
@@ -158,8 +149,5 @@ func TestResolveGatewayProviderMapsOpenClawToRemoteEndpoint(t *testing.T) {
 	}
 	if result.ResolvedGatewayProviderID != GatewayProviderOpenClaw {
 		t.Fatalf("expected openclaw gateway provider, got %#v", result)
-	}
-	if result.ResolvedEndpointTarget != EndpointTargetRemote {
-		t.Fatalf("expected remote endpoint target for openclaw, got %#v", result)
 	}
 }

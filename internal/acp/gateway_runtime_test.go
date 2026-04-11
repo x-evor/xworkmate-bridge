@@ -12,7 +12,7 @@ func TestResolveGatewayReportedRemoteAddressUsesBuiltInOpenClawEndpoint(t *testi
 	server := NewServer()
 
 	got := resolveGatewayReportedRemoteAddress(server, gatewayruntime.ConnectRequest{
-		Mode: "remote",
+		Mode: "openclaw",
 		Endpoint: gatewayruntime.Endpoint{
 			Host: "127.0.0.1",
 			Port: 18789,
@@ -34,7 +34,7 @@ func TestResolveGatewayReportedRemoteAddressNormalizesExplicitPublicRemoteHost(
 	server := NewServer()
 
 	got := resolveGatewayReportedRemoteAddress(server, gatewayruntime.ConnectRequest{
-		Mode: "remote",
+		Mode: "openclaw",
 		Endpoint: gatewayruntime.Endpoint{
 			Host: "openclaw.svc.plus",
 			Port: 443,

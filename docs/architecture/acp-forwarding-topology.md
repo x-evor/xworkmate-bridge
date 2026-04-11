@@ -55,7 +55,7 @@ flowchart LR
         CAP3["gemini"]
 
         GW["Bridge-owned gateway routing"]
-        GW1["remote mode -> openclaw"]
+        GW1["gatewayProviderId=openclaw"]
 
         BRIDGE --> CAP
         CAP --> CAP1
@@ -93,7 +93,7 @@ Important distinction:
   single-agent providers: `codex`, `opencode`, and `gemini`
 - `gateway` is not part of that provider catalog; it is exposed through the
   separate `xworkmate.gateway.*` bridge-owned runtime path
-- for remote gateway mode, the bridge rewrites the upstream target to
+- for `gatewayProviderId=openclaw`, the bridge rewrites the upstream target to
   `wss://openclaw.svc.plus`
 
 ## Production Truth
@@ -126,4 +126,4 @@ Canonical APP-facing paths stay on the bridge origin:
 - no production `xworkmate.providers.sync`
 - no app direct call to `acp-server.svc.plus/*`
 - no app direct call to `openclaw.svc.plus`
-- remote gateway runtime status is reported as `openclaw.svc.plus:443`, but the app still talks only to the bridge
+- openclaw gateway runtime status is reported as `openclaw.svc.plus:443`, but the app still talks only to the bridge

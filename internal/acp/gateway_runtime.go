@@ -16,7 +16,7 @@ func handleGatewayConnect(
 ) map[string]any {
 	request := gatewayruntime.ConnectRequest{
 		RuntimeID:          strings.TrimSpace(shared.StringArg(params, "runtimeId", "")),
-		Mode:               strings.TrimSpace(shared.StringArg(params, "mode", "unconfigured")),
+		Mode:               strings.TrimSpace(shared.StringArg(params, "gatewayProviderId", "")),
 		ClientID:           strings.TrimSpace(shared.StringArg(params, "clientId", "")),
 		Locale:             strings.TrimSpace(shared.StringArg(params, "locale", "")),
 		UserAgent:          strings.TrimSpace(shared.StringArg(params, "userAgent", "")),
@@ -53,6 +53,9 @@ func handleGatewayConnect(
 			Password:    strings.TrimSpace(shared.StringArg(asMap(params["auth"]), "password", "")),
 		},
 	}
+	if request.Mode == "" {
+		request.Mode = "local"
+	}
 	request = applyProductionGatewayRouting(request)
 	request.ReportedRemoteAddress = resolveGatewayReportedRemoteAddress(server, request)
 	result := server.gateway.Connect(request, notify)
@@ -68,7 +71,7 @@ func handleGatewayConnect(
 func applyProductionGatewayRouting(
 	request gatewayruntime.ConnectRequest,
 ) gatewayruntime.ConnectRequest {
-	if strings.TrimSpace(strings.ToLower(request.Mode)) != "remote" {
+	if strings.TrimSpace(strings.ToLower(request.Mode)) != "openclaw" {
 		return request
 	}
 	request.Endpoint = gatewayruntime.Endpoint{
@@ -187,7 +190,7 @@ func resolveGatewayReportedRemoteAddress(
 	server *Server,
 	request gatewayruntime.ConnectRequest,
 ) string {
-	if strings.TrimSpace(strings.ToLower(request.Mode)) != "remote" {
+	if strings.TrimSpace(strings.ToLower(request.Mode)) != "openclaw" {
 		return ""
 	}
 	_ = server

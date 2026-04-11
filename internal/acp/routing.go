@@ -30,7 +30,6 @@ func resolveRoutingMetadataWithProviders(
 		Prompt:                     strings.TrimSpace(sharedString(params, "taskPrompt")),
 		WorkingDirectory:           strings.TrimSpace(sharedString(params, "workingDirectory")),
 		RoutingMode:                strings.TrimSpace(sharedString(routingParams, "routingMode")),
-		PreferredGatewayTarget:     strings.TrimSpace(sharedString(routingParams, "preferredGatewayTarget")),
 		PreferredGatewayProviderID: strings.TrimSpace(sharedString(routingParams, "preferredGatewayProviderId")),
 		ExplicitExecutionTarget:    strings.TrimSpace(sharedString(routingParams, "explicitExecutionTarget")),
 		ExplicitProviderID:         strings.TrimSpace(sharedString(routingParams, "explicitProviderId")),
@@ -54,7 +53,6 @@ func mergeRoutingResponse(response map[string]any, result router.Result) map[str
 		response = map[string]any{}
 	}
 	response["resolvedExecutionTarget"] = result.ResolvedExecutionTarget
-	response["resolvedEndpointTarget"] = result.ResolvedEndpointTarget
 	response["resolvedProviderId"] = result.ResolvedProviderID
 	response["resolvedGatewayProviderId"] = result.ResolvedGatewayProviderID
 	response["resolvedModel"] = result.ResolvedModel
