@@ -79,9 +79,7 @@ func applyProductionGatewayRouting(
 		Port: 443,
 		TLS:  true,
 	}
-	request.Auth.Token = strings.TrimSpace(
-		shared.EnvOrDefault("INTERNAL_SERVICE_TOKEN", ""),
-	)
+	request.Auth.Token = strings.TrimSpace(bridgeUpstreamAuthorizationHeader())
 	request.Auth.Password = ""
 	request.ConnectAuthMode = "shared-token"
 	request.ConnectAuthFields = []string{"token"}

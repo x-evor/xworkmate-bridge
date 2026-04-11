@@ -22,10 +22,17 @@ type syncedProvider struct {
 	Enabled             bool
 }
 
-func newProductionProviderCatalog() (map[string]syncedProvider, []string) {
-	authorizationHeader := normalizeAuthorizationHeader(
-		strings.TrimSpace(shared.EnvOrDefault("INTERNAL_SERVICE_TOKEN", "")),
+func bridgeUpstreamAuthorizationHeader() string {
+	return normalizeAuthorizationHeader(
+		firstNonEmptyString(
+			strings.TrimSpace(shared.EnvOrDefault("INTERNAL_SERVICE_TOKEN", "")),
+			strings.TrimSpace(shared.EnvOrDefault("BRIDGE_AUTH_TOKEN", "")),
+		),
 	)
+}
+
+func newProductionProviderCatalog() (map[string]syncedProvider, []string) {
+	authorizationHeader := bridgeUpstreamAuthorizationHeader()
 	providers := []syncedProvider{
 		{
 			ProviderID:          "codex",

@@ -70,6 +70,25 @@ func TestCapabilitiesExposeBuiltInProductionProviderCatalog(t *testing.T) {
 	}
 }
 
+func TestProductionProviderCatalogFallsBackToBridgeAuthToken(t *testing.T) {
+	t.Setenv("INTERNAL_SERVICE_TOKEN", "")
+	t.Setenv("BRIDGE_AUTH_TOKEN", "bridge-auth-token")
+
+	catalog, order := newProductionProviderCatalog()
+	if len(order) != 3 {
+		t.Fatalf("expected 3 providers in order, got %#v", order)
+	}
+	for _, providerID := range order {
+		provider, ok := catalog[providerID]
+		if !ok {
+			t.Fatalf("expected provider %q in catalog", providerID)
+		}
+		if got := provider.AuthorizationHeader; got != "Bearer bridge-auth-token" {
+			t.Fatalf("expected fallback bearer header for %q, got %q", providerID, got)
+		}
+	}
+}
+
 func TestProvidersSyncMethodIsRemovedFromProductionFlow(t *testing.T) {
 	server := NewServer()
 	_, rpcErr := server.handleRequest(shared.RPCRequest{
@@ -162,6 +181,65 @@ func TestExecuteSessionTaskUsesBuiltInProductionProvider(t *testing.T) {
 	}
 	if _, exists := lastForwardedParams["metadata"]; exists {
 		t.Fatalf("expected metadata to be stripped for external provider request, got %#v", lastForwardedParams)
+	}
+}
+
+func TestExecuteSessionTaskUsesBridgeAuthTokenFallbackForBuiltInProvider(t *testing.T) {
+	externalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer bridge-auth-token" {
+			t.Fatalf("expected fallback bearer auth header, got %q", got)
+		}
+		defer func() {
+			_ = r.Body.Close()
+		}()
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      request["id"],
+			"result": map[string]any{
+				"success": true,
+				"output":  "bridge-auth-token-ok",
+			},
+		})
+	}))
+	defer externalServer.Close()
+
+	t.Setenv("INTERNAL_SERVICE_TOKEN", "")
+	t.Setenv("BRIDGE_AUTH_TOKEN", "bridge-auth-token")
+
+	server := NewServer()
+	setTestBridgeProvider(server, syncedProvider{
+		ProviderID:          "codex",
+		Label:               "Codex",
+		Endpoint:            externalServer.URL,
+		AuthorizationHeader: bridgeUpstreamAuthorizationHeader(),
+		Enabled:             true,
+	})
+
+	response, rpcErr := server.executeSessionTask(task{
+		req: shared.RPCRequest{
+			Method: "session.start",
+			Params: map[string]any{
+				"sessionId":        "session-bridge-auth-fallback",
+				"threadId":         "thread-bridge-auth-fallback",
+				"taskPrompt":       "hello from bridge auth fallback",
+				"workingDirectory": t.TempDir(),
+				"routing": map[string]any{
+					"routingMode":             "explicit",
+					"explicitExecutionTarget": "singleAgent",
+					"explicitProviderId":      "codex",
+				},
+			},
+		},
+	})
+	if rpcErr != nil {
+		t.Fatalf("expected success, got rpc error: %v", rpcErr)
+	}
+	if got := response["output"]; got != "bridge-auth-token-ok" {
+		t.Fatalf("expected fallback provider output, got %#v", response)
 	}
 }
 
