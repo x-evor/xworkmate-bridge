@@ -20,39 +20,44 @@ const (
 	EndpointTargetSingleAgent = "singleAgent"
 	EndpointTargetLocal       = "local"
 	EndpointTargetRemote      = "remote"
+
+	GatewayProviderLocal    = "local"
+	GatewayProviderOpenClaw = "openclaw"
 )
 
 type Request struct {
-	Prompt                  string
-	WorkingDirectory        string
-	RoutingMode             string
-	PreferredGatewayTarget  string
-	ExplicitExecutionTarget string
-	ExplicitProviderID      string
-	ExplicitModel           string
-	ExplicitSkills          []string
-	AllowSkillInstall       bool
-	InstallApproval         skills.InstallApproval
-	AvailableSkills         []skills.Candidate
-	AvailableProviders      []string
-	AIGatewayBaseURL        string
-	AIGatewayAPIKey         string
+	Prompt                     string
+	WorkingDirectory           string
+	RoutingMode                string
+	PreferredGatewayTarget     string
+	PreferredGatewayProviderID string
+	ExplicitExecutionTarget    string
+	ExplicitProviderID         string
+	ExplicitModel              string
+	ExplicitSkills             []string
+	AllowSkillInstall          bool
+	InstallApproval            skills.InstallApproval
+	AvailableSkills            []skills.Candidate
+	AvailableProviders         []string
+	AIGatewayBaseURL           string
+	AIGatewayAPIKey            string
 }
 
 type Result struct {
-	ResolvedExecutionTarget string
-	ResolvedEndpointTarget  string
-	ResolvedProviderID      string
-	ResolvedModel           string
-	ResolvedSkills          []string
-	SkillResolutionSource   string
-	SkillCandidates         []skills.Candidate
-	NeedsSkillInstall       bool
-	SkillInstallRequestID   string
-	MemorySources           []memory.Source
-	Unavailable             bool
-	UnavailableCode         string
-	UnavailableMessage      string
+	ResolvedExecutionTarget   string
+	ResolvedEndpointTarget    string
+	ResolvedProviderID        string
+	ResolvedGatewayProviderID string
+	ResolvedModel             string
+	ResolvedSkills            []string
+	SkillResolutionSource     string
+	SkillCandidates           []skills.Candidate
+	NeedsSkillInstall         bool
+	SkillInstallRequestID     string
+	MemorySources             []memory.Source
+	Unavailable               bool
+	UnavailableCode           string
+	UnavailableMessage        string
 }
 
 type Resolver struct {
@@ -81,7 +86,7 @@ func (r Resolver) Resolve(req Request) Result {
 		MemorySources: mem.Sources,
 	}
 
-	result.ResolvedExecutionTarget, result.ResolvedEndpointTarget = r.resolveExecution(req, mem.Preferences)
+	result.ResolvedExecutionTarget, result.ResolvedEndpointTarget, result.ResolvedGatewayProviderID = r.resolveExecution(req, mem.Preferences)
 	result.ResolvedProviderID, result.Unavailable, result.UnavailableCode, result.UnavailableMessage = resolveProvider(
 		req,
 		mem.Preferences,
@@ -124,7 +129,10 @@ func (r Resolver) Resolve(req Request) Result {
 	}
 	if result.ResolvedEndpointTarget == "" {
 		if result.ResolvedExecutionTarget == ExecutionTargetGateway {
-			result.ResolvedEndpointTarget = normalizeGatewayTarget(req.PreferredGatewayTarget)
+			result.ResolvedGatewayProviderID, result.ResolvedEndpointTarget = resolveGatewayRouting(
+				req.PreferredGatewayProviderID,
+				req.PreferredGatewayTarget,
+			)
 		} else {
 			result.ResolvedEndpointTarget = EndpointTargetSingleAgent
 		}
@@ -132,10 +140,14 @@ func (r Resolver) Resolve(req Request) Result {
 	return result
 }
 
-func (r Resolver) resolveExecution(req Request, prefs memory.Preferences) (string, string) {
+func (r Resolver) resolveExecution(req Request, prefs memory.Preferences) (string, string, string) {
 	explicit := strings.TrimSpace(req.ExplicitExecutionTarget)
 	if strings.EqualFold(strings.TrimSpace(req.RoutingMode), RoutingModeExplicit) && explicit != "" {
-		return mapExplicitTarget(explicit)
+		return mapExplicitTarget(
+			explicit,
+			req.PreferredGatewayProviderID,
+			req.PreferredGatewayTarget,
+		)
 	}
 
 	prompt := normalize(req.Prompt)
@@ -146,40 +158,56 @@ func (r Resolver) resolveExecution(req Request, prefs memory.Preferences) (strin
 
 	switch {
 	case localTask && complexTask:
-		return ExecutionTargetMultiAgent, EndpointTargetSingleAgent
+		return ExecutionTargetMultiAgent, EndpointTargetSingleAgent, ""
 	case onlineTask && complexTask:
-		return ExecutionTargetMultiAgent, EndpointTargetSingleAgent
+		return ExecutionTargetMultiAgent, EndpointTargetSingleAgent, ""
 	case localTask:
-		return ExecutionTargetSingleAgent, EndpointTargetSingleAgent
+		return ExecutionTargetSingleAgent, EndpointTargetSingleAgent, ""
 	case onlineTask:
-		return ExecutionTargetGateway, normalizeGatewayTarget(req.PreferredGatewayTarget)
+		providerID, endpointTarget := resolveGatewayRouting(
+			req.PreferredGatewayProviderID,
+			req.PreferredGatewayTarget,
+		)
+		return ExecutionTargetGateway, endpointTarget, providerID
 	case complexTask:
-		return ExecutionTargetMultiAgent, EndpointTargetSingleAgent
+		return ExecutionTargetMultiAgent, EndpointTargetSingleAgent, ""
 	}
 
 	switch normalizeExecutionTarget(r.classify(req)) {
 	case ExecutionTargetGateway:
-		return ExecutionTargetGateway, normalizeGatewayTarget(req.PreferredGatewayTarget)
+		providerID, endpointTarget := resolveGatewayRouting(
+			req.PreferredGatewayProviderID,
+			req.PreferredGatewayTarget,
+		)
+		return ExecutionTargetGateway, endpointTarget, providerID
 	case ExecutionTargetMultiAgent:
-		return ExecutionTargetMultiAgent, EndpointTargetSingleAgent
+		return ExecutionTargetMultiAgent, EndpointTargetSingleAgent, ""
 	case ExecutionTargetSingleAgent:
-		return ExecutionTargetSingleAgent, EndpointTargetSingleAgent
+		return ExecutionTargetSingleAgent, EndpointTargetSingleAgent, ""
 	}
 
 	switch normalizeExecutionTarget(strings.TrimSpace(prefs.PreferredRoute)) {
 	case ExecutionTargetGateway:
-		return ExecutionTargetGateway, normalizeGatewayTarget(req.PreferredGatewayTarget)
+		providerID, endpointTarget := resolveGatewayRouting(
+			req.PreferredGatewayProviderID,
+			req.PreferredGatewayTarget,
+		)
+		return ExecutionTargetGateway, endpointTarget, providerID
 	case ExecutionTargetMultiAgent:
-		return ExecutionTargetMultiAgent, EndpointTargetSingleAgent
+		return ExecutionTargetMultiAgent, EndpointTargetSingleAgent, ""
 	case ExecutionTargetSingleAgent:
 		if len(normalizeProviders(req.AvailableProviders)) > 0 {
-			return ExecutionTargetSingleAgent, EndpointTargetSingleAgent
+			return ExecutionTargetSingleAgent, EndpointTargetSingleAgent, ""
 		}
 	}
 	if len(normalizeProviders(req.AvailableProviders)) > 0 {
-		return ExecutionTargetSingleAgent, EndpointTargetSingleAgent
+		return ExecutionTargetSingleAgent, EndpointTargetSingleAgent, ""
 	}
-	return ExecutionTargetGateway, normalizeGatewayTarget(req.PreferredGatewayTarget)
+	providerID, endpointTarget := resolveGatewayRouting(
+		req.PreferredGatewayProviderID,
+		req.PreferredGatewayTarget,
+	)
+	return ExecutionTargetGateway, endpointTarget, providerID
 }
 
 func (r Resolver) classify(req Request) string {
@@ -193,27 +221,75 @@ func (r Resolver) classify(req Request) string {
 	}))
 }
 
-func mapExplicitTarget(value string) (string, string) {
+func mapExplicitTarget(
+	value string,
+	preferredGatewayProviderID string,
+	preferredGatewayTarget string,
+) (string, string, string) {
 	switch strings.TrimSpace(value) {
 	case EndpointTargetLocal:
-		return ExecutionTargetGateway, EndpointTargetLocal
+		return ExecutionTargetGateway, EndpointTargetLocal, GatewayProviderLocal
 	case EndpointTargetRemote:
-		return ExecutionTargetGateway, EndpointTargetRemote
+		return ExecutionTargetGateway, EndpointTargetRemote, GatewayProviderOpenClaw
 	case "multiAgent", ExecutionTargetMultiAgent:
-		return ExecutionTargetMultiAgent, EndpointTargetSingleAgent
+		return ExecutionTargetMultiAgent, EndpointTargetSingleAgent, ""
 	case EndpointTargetSingleAgent, ExecutionTargetSingleAgent:
-		return ExecutionTargetSingleAgent, EndpointTargetSingleAgent
+		return ExecutionTargetSingleAgent, EndpointTargetSingleAgent, ""
+	case ExecutionTargetGateway:
+		providerID, endpointTarget := resolveGatewayRouting(
+			preferredGatewayProviderID,
+			preferredGatewayTarget,
+		)
+		return ExecutionTargetGateway, endpointTarget, providerID
 	default:
-		return ExecutionTargetSingleAgent, EndpointTargetSingleAgent
+		return ExecutionTargetSingleAgent, EndpointTargetSingleAgent, ""
 	}
 }
 
 func normalizeGatewayTarget(value string) string {
-	switch strings.TrimSpace(value) {
-	case EndpointTargetLocal, "":
-		return EndpointTargetLocal
+	_, endpointTarget := resolveGatewayRouting("", value)
+	return endpointTarget
+}
+
+func resolveGatewayRouting(preferredGatewayProviderID, preferredGatewayTarget string) (string, string) {
+	providerID := normalizeGatewayProvider(preferredGatewayProviderID)
+	if providerID == "" {
+		providerID = gatewayProviderFromEndpointTarget(preferredGatewayTarget)
+	}
+	if providerID == "" {
+		providerID = GatewayProviderLocal
+	}
+	return providerID, endpointTargetForGatewayProvider(providerID)
+}
+
+func normalizeGatewayProvider(value string) string {
+	switch normalize(value) {
+	case GatewayProviderLocal:
+		return GatewayProviderLocal
+	case GatewayProviderOpenClaw:
+		return GatewayProviderOpenClaw
 	default:
+		return ""
+	}
+}
+
+func gatewayProviderFromEndpointTarget(value string) string {
+	switch strings.TrimSpace(value) {
+	case EndpointTargetRemote:
+		return GatewayProviderOpenClaw
+	case EndpointTargetLocal, "":
+		return GatewayProviderLocal
+	default:
+		return ""
+	}
+}
+
+func endpointTargetForGatewayProvider(providerID string) string {
+	switch normalizeGatewayProvider(providerID) {
+	case GatewayProviderOpenClaw:
 		return EndpointTargetRemote
+	default:
+		return EndpointTargetLocal
 	}
 }
 

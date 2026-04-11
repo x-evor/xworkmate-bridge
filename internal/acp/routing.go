@@ -27,23 +27,24 @@ func resolveRoutingMetadataWithProviders(
 
 	resolver := router.NewResolver()
 	result := resolver.Resolve(router.Request{
-		Prompt:                  strings.TrimSpace(sharedString(params, "taskPrompt")),
-		WorkingDirectory:        strings.TrimSpace(sharedString(params, "workingDirectory")),
-		RoutingMode:             strings.TrimSpace(sharedString(routingParams, "routingMode")),
-		PreferredGatewayTarget:  strings.TrimSpace(sharedString(routingParams, "preferredGatewayTarget")),
-		ExplicitExecutionTarget: strings.TrimSpace(sharedString(routingParams, "explicitExecutionTarget")),
-		ExplicitProviderID:      strings.TrimSpace(sharedString(routingParams, "explicitProviderId")),
-		ExplicitModel:           strings.TrimSpace(sharedString(routingParams, "explicitModel")),
-		ExplicitSkills:          parseRoutingStringSlice(routingParams["explicitSkills"]),
-		AllowSkillInstall:       parseBool(routingParams["allowSkillInstall"]),
+		Prompt:                     strings.TrimSpace(sharedString(params, "taskPrompt")),
+		WorkingDirectory:           strings.TrimSpace(sharedString(params, "workingDirectory")),
+		RoutingMode:                strings.TrimSpace(sharedString(routingParams, "routingMode")),
+		PreferredGatewayTarget:     strings.TrimSpace(sharedString(routingParams, "preferredGatewayTarget")),
+		PreferredGatewayProviderID: strings.TrimSpace(sharedString(routingParams, "preferredGatewayProviderId")),
+		ExplicitExecutionTarget:    strings.TrimSpace(sharedString(routingParams, "explicitExecutionTarget")),
+		ExplicitProviderID:         strings.TrimSpace(sharedString(routingParams, "explicitProviderId")),
+		ExplicitModel:              strings.TrimSpace(sharedString(routingParams, "explicitModel")),
+		ExplicitSkills:             parseRoutingStringSlice(routingParams["explicitSkills"]),
+		AllowSkillInstall:          parseBool(routingParams["allowSkillInstall"]),
 		InstallApproval: skills.InstallApproval{
 			RequestID:         strings.TrimSpace(sharedString(installApproval, "requestId")),
 			ApprovedSkillKeys: parseRoutingStringSlice(installApproval["approvedSkillKeys"]),
 		},
-		AvailableSkills:   parseRoutingSkillCandidates(routingParams["availableSkills"]),
+		AvailableSkills:    parseRoutingSkillCandidates(routingParams["availableSkills"]),
 		AvailableProviders: append([]string(nil), availableProviders...),
-		AIGatewayBaseURL:  strings.TrimSpace(sharedString(params, "aiGatewayBaseUrl")),
-		AIGatewayAPIKey:   strings.TrimSpace(sharedString(params, "aiGatewayApiKey")),
+		AIGatewayBaseURL:   strings.TrimSpace(sharedString(params, "aiGatewayBaseUrl")),
+		AIGatewayAPIKey:    strings.TrimSpace(sharedString(params, "aiGatewayApiKey")),
 	})
 	return result, true
 }
@@ -55,6 +56,7 @@ func mergeRoutingResponse(response map[string]any, result router.Result) map[str
 	response["resolvedExecutionTarget"] = result.ResolvedExecutionTarget
 	response["resolvedEndpointTarget"] = result.ResolvedEndpointTarget
 	response["resolvedProviderId"] = result.ResolvedProviderID
+	response["resolvedGatewayProviderId"] = result.ResolvedGatewayProviderID
 	response["resolvedModel"] = result.ResolvedModel
 	response["resolvedSkills"] = append([]string(nil), result.ResolvedSkills...)
 	response["skillResolutionSource"] = result.SkillResolutionSource

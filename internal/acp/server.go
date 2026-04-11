@@ -300,19 +300,22 @@ func (s *Server) handleRequest(
 	switch method {
 	case "acp.capabilities":
 		providerCatalog := s.availableProviderCatalog()
+		gatewayProviders := availableGatewayProviderCatalog()
 		singleAgent := len(providerCatalog) > 0
 		multiAgent := shared.BoolArg(
 			shared.EnvOrDefault("ACP_MULTI_AGENT_ENABLED", "true"),
 			true,
 		)
 		result := map[string]any{
-			"singleAgent":     singleAgent,
-			"multiAgent":      multiAgent,
-			"providerCatalog": providerCatalog,
+			"singleAgent":      singleAgent,
+			"multiAgent":       multiAgent,
+			"providerCatalog":  providerCatalog,
+			"gatewayProviders": gatewayProviders,
 			"capabilities": map[string]any{
-				"single_agent":    singleAgent,
-				"multi_agent":     multiAgent,
-				"providerCatalog": providerCatalog,
+				"single_agent":     singleAgent,
+				"multi_agent":      multiAgent,
+				"providerCatalog":  providerCatalog,
+				"gatewayProviders": gatewayProviders,
 			},
 		}
 		return result, nil

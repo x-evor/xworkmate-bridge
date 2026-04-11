@@ -14,12 +14,17 @@
 ### 1. 路由发现层
 
 - `acp.capabilities` 返回动态 provider 列表。
-- 至少覆盖 `opencode / codex / openclaw / gateway` 中当前环境真实可用项。
+- 至少覆盖：
+  - `singleAgentProviders`: `opencode / codex / gemini`
+  - `gatewayProviders`: `local / openclaw`
 - `xworkmate.routing.resolve` 根据 `taskPrompt`、`executionTarget`、`selectedSkills` 返回正确的：
   - `resolvedExecutionTarget`
   - `resolvedProviderId`
+  - `resolvedGatewayProviderId`
   - `resolvedEndpointTarget`
 - `acp.capabilities` 暴露 bridge 内建的生产 provider catalog，并参与后续路由选择。
+- APP 对 gateway 的分区应以 `gatewayProviders` / `resolvedGatewayProviderId`
+  为主，不以 `local / remote` 传输语义为主。
 
 ### 2. 典型 Case 层
 
@@ -97,7 +102,11 @@ flutter test test/runtime/app_controller_single_agent_workspace_binding_regressi
 
 - `acp.capabilities` 的 provider 列表来自 bridge 当前环境，而不是本地写死。
 - bridge 内建生产 catalog 包含 `codex / opencode / gemini`，且不依赖 app 侧预同步。
-- `xworkmate.routing.resolve` 在 skill / prompt / target 组合下，返回合理的 provider 与 endpoint target。
+- bridge 还会暴露 `gatewayProviders = local / openclaw`。
+- `xworkmate.routing.resolve` 在 skill / prompt / target 组合下，返回合理的
+  `resolvedProviderId` 或 `resolvedGatewayProviderId`。
+- `resolvedEndpointTarget` 仅作为兼容字段保留，APP 侧 gateway 分流以
+  `resolvedGatewayProviderId` 为主。
 
 ### 执行层断言
 
@@ -145,7 +154,7 @@ flutter test test/runtime/app_controller_single_agent_workspace_binding_regressi
 
 额外约定：
 
-- `openclaw` 作为扩展路由的一部分，先按 bridge 发现结果驱动。
+- `openclaw` 作为 `gatewayProviders` 之一，按 bridge 发现结果驱动。
 - 如果当前环境没有暴露某个 provider，测试允许 `skip`，但要保留断言入口和记录。
 - UI 本轮不改结构，只验证 provider 列表来源与展示结果是否随 bridge 动态变化。
 

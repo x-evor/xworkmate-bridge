@@ -58,6 +58,7 @@ func TestHandleRoutingResolveCoversNineScenarioBuckets(t *testing.T) {
 		name                      string
 		prompt                    string
 		expectedExecutionTarget   string
+		expectedGatewayProviderID string
 		expectedSkillSource       string
 		expectedResolvedSkill     string
 		expectedNeedsSkillInstall bool
@@ -101,6 +102,7 @@ func TestHandleRoutingResolveCoversNineScenarioBuckets(t *testing.T) {
 			name:                      "image-cog",
 			prompt:                    "use image-cog to generate consistent characters",
 			expectedExecutionTarget:   "gateway",
+			expectedGatewayProviderID: "local",
 			expectedSkillSource:       "find_skills",
 			expectedNeedsSkillInstall: true,
 		},
@@ -108,6 +110,7 @@ func TestHandleRoutingResolveCoversNineScenarioBuckets(t *testing.T) {
 			name:                      "image-video-generation-editting",
 			prompt:                    "wan 图生视频并做视频编辑",
 			expectedExecutionTarget:   "gateway",
+			expectedGatewayProviderID: "local",
 			expectedSkillSource:       "find_skills",
 			expectedNeedsSkillInstall: true,
 		},
@@ -115,15 +118,17 @@ func TestHandleRoutingResolveCoversNineScenarioBuckets(t *testing.T) {
 			name:                      "video-translator",
 			prompt:                    "translate video subtitles and dub the clip",
 			expectedExecutionTarget:   "gateway",
+			expectedGatewayProviderID: "local",
 			expectedSkillSource:       "find_skills",
 			expectedNeedsSkillInstall: true,
 		},
 		{
-			name:                    "browser-search-news",
-			prompt:                  "跨浏览器执行并搜索最新资讯采集结果",
-			expectedExecutionTarget: "gateway",
-			expectedSkillSource:     "local_match",
-			expectedResolvedSkill:   "Browser Automation",
+			name:                      "browser-search-news",
+			prompt:                    "跨浏览器执行并搜索最新资讯采集结果",
+			expectedExecutionTarget:   "gateway",
+			expectedGatewayProviderID: "local",
+			expectedSkillSource:       "local_match",
+			expectedResolvedSkill:     "Browser Automation",
 		},
 	}
 
@@ -148,6 +153,11 @@ func TestHandleRoutingResolveCoversNineScenarioBuckets(t *testing.T) {
 
 			if got := result["resolvedExecutionTarget"]; got != tc.expectedExecutionTarget {
 				t.Fatalf("expected execution target %q, got %#v", tc.expectedExecutionTarget, got)
+			}
+			if tc.expectedGatewayProviderID != "" {
+				if got := result["resolvedGatewayProviderId"]; got != tc.expectedGatewayProviderID {
+					t.Fatalf("expected gateway provider %q, got %#v", tc.expectedGatewayProviderID, got)
+				}
 			}
 			if got := result["skillResolutionSource"]; got != tc.expectedSkillSource {
 				t.Fatalf("expected skill source %q, got %#v", tc.expectedSkillSource, got)

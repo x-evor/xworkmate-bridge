@@ -26,6 +26,18 @@ Relevant source:
 
 ## 2. ACP Bridge HTTP / WebSocket API
 
+Canonical APP-facing public origin:
+
+- `https://xworkmate-bridge.svc.plus`
+
+Canonical APP-facing ACP paths:
+
+- `POST /acp/rpc`
+- `GET /acp` for WebSocket ACP
+
+Independent upstream ACP and gateway services may exist behind the bridge, but
+they are not the primary APP contract.
+
 ### 2.1 Default listen address
 
 `serve` mode reads:
@@ -121,6 +133,10 @@ Response shape:
       { "providerId": "opencode", "label": "OpenCode" },
       { "providerId": "gemini", "label": "Gemini" }
     ],
+    "gatewayProviders": [
+      { "providerId": "local", "label": "Local" },
+      { "providerId": "openclaw", "label": "OpenClaw" }
+    ],
     "capabilities": {
       "single_agent": true,
       "multi_agent": true,
@@ -128,6 +144,10 @@ Response shape:
         { "providerId": "codex", "label": "Codex" },
         { "providerId": "opencode", "label": "OpenCode" },
         { "providerId": "gemini", "label": "Gemini" }
+      ],
+      "gatewayProviders": [
+        { "providerId": "local", "label": "Local" },
+        { "providerId": "openclaw", "label": "OpenClaw" }
       ]
     }
   }
@@ -137,10 +157,13 @@ Response shape:
 Notes:
 
 - `providerCatalog` is bridge-owned and built in at startup
-- production provider map is fixed to:
+- `gatewayProviders` is the APP-facing gateway provider catalog
+- production upstream routing map is fixed to:
   - `codex` -> `https://acp-server.svc.plus/codex/acp/rpc`
   - `opencode` -> `https://acp-server.svc.plus/opencode/acp/rpc`
   - `gemini` -> `https://acp-server.svc.plus/gemini/acp/rpc`
+- APP traffic reaches those upstreams through the bridge's canonical public
+  ACP path, not by depending on upstream URLs directly
 - upstream ACP auth uses `Authorization: Bearer $INTERNAL_SERVICE_TOKEN`
 - `multiAgent` is controlled by `ACP_MULTI_AGENT_ENABLED`, default `true`
 
@@ -298,8 +321,8 @@ Purpose:
 
 - resolve routing metadata into:
   - execution target
-  - endpoint target
   - provider
+  - gateway provider
   - model
   - selected skills
   - install suggestion / unavailable state
@@ -318,6 +341,7 @@ Key input fields:
 - `taskPrompt`
 - `workingDirectory`
 - `routing.routingMode`
+- `routing.preferredGatewayProviderId`
 - `routing.preferredGatewayTarget`
 - `routing.explicitExecutionTarget`
 - `routing.explicitProviderId`
@@ -332,8 +356,9 @@ Key input fields:
 Representative response fields:
 
 - `resolvedExecutionTarget`
-- `resolvedEndpointTarget`
 - `resolvedProviderId`
+- `resolvedGatewayProviderId`
+- `resolvedEndpointTarget`
 - `resolvedModel`
 - `resolvedSkills`
 - `skillResolutionSource`
@@ -344,6 +369,76 @@ Representative response fields:
 - `skillInstallRequestId`
 - `skillCandidates`
 - `memorySources`
+
+APP-facing interpretation:
+
+- if `resolvedExecutionTarget = single-agent`, use `resolvedProviderId`
+- if `resolvedExecutionTarget = gateway`, use `resolvedGatewayProviderId`
+- `resolvedEndpointTarget` is retained as a compatibility field for bridge
+  internals; APP code should prefer `resolvedGatewayProviderId`
+
+### 3.7.1 UI / APP consumption model
+
+Recommended APP-side flow:
+
+1. Call `acp.capabilities` at startup or refresh time.
+2. Read:
+   - `providerCatalog` as `singleAgentProviders`
+   - `gatewayProviders` as `gatewayProviders`
+3. Before execution, call `xworkmate.routing.resolve`.
+4. Use the resolved fields, not local heuristics, to decide which UI state and
+   execution branch to use.
+5. Send `session.start` or `session.message` through the bridge canonical path.
+
+Suggested APP-side view model:
+
+```json
+{
+  "executionTargets": ["single-agent", "multi-agent", "gateway"],
+  "singleAgentProviders": ["codex", "opencode", "gemini"],
+  "gatewayProviders": ["local", "openclaw"]
+}
+```
+
+Recommended interpretation rules:
+
+- if `resolvedExecutionTarget = single-agent`
+  - read `resolvedProviderId`
+  - ignore `resolvedGatewayProviderId`
+- if `resolvedExecutionTarget = multi-agent`
+  - treat the run as bridge-orchestrated multi-agent execution
+  - do not force a single provider picker as the primary routing control
+- if `resolvedExecutionTarget = gateway`
+  - read `resolvedGatewayProviderId`
+  - ignore `resolvedProviderId`
+
+Compatibility rule:
+
+- `resolvedEndpointTarget` is a compatibility field
+- APP code should not use `local` / `remote` as its primary business model
+- current bridge mapping is:
+  - `resolvedGatewayProviderId = local` -> `resolvedEndpointTarget = local`
+  - `resolvedGatewayProviderId = openclaw` -> `resolvedEndpointTarget = remote`
+
+UI binding guidance:
+
+- provider picker for single-agent mode should be populated from
+  `providerCatalog`
+- gateway picker should be populated from `gatewayProviders`
+- gateway UI should display `local` and `openclaw` as selectable providers
+  rather than exposing transport-level `local` / `remote` terminology
+- disabled or unavailable states should come from `xworkmate.routing.resolve`
+  response fields such as:
+  - `unavailable`
+  - `unavailableCode`
+  - `unavailableMessage`
+
+Do not:
+
+- infer provider availability from hardcoded lists
+- treat `openclaw` as a single-agent provider
+- re-derive auto-routing from prompt text on the APP side
+- use upstream URLs as the APP-facing contract
 
 ### 3.8 `xworkmate.mounts.reconcile`
 
@@ -381,6 +476,8 @@ Managed MCP server item shape:
 Purpose:
 
 - connect a bridge runtime session to the bridge-owned production gateway route
+- from the APP perspective this still enters through the canonical bridge ACP
+  path and bridge JSON-RPC methods, not a direct `openclaw` URL contract
 
 Key params:
 

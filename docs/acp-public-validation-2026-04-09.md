@@ -1,8 +1,13 @@
 # ACP Public Validation - 2026-04-09
 
-This document records the post-deployment public validation for `xworkmate-bridge.svc.plus` and the unified ACP ingress at `acp-server.svc.plus`.
+This document records the post-deployment validation of the bridge public
+origin at `xworkmate-bridge.svc.plus` and the independent upstream ACP ingress
+at `acp-server.svc.plus`.
 
-It is intended as an app-integration reference so future clients use the verified public endpoints and expected JSON-RPC methods.
+For APP integration, the canonical public contract remains the bridge origin
+and the `.../acp/rpc` path on that origin. The direct `acp-server.svc.plus`
+URLs in this document are upstream validation targets, not the preferred APP
+entry points.
 
 ## Verified Public Endpoints
 
@@ -17,6 +22,10 @@ It is intended as an app-integration reference so future clients use the verifie
 The public ACP JSON-RPC endpoint is the `.../acp/rpc` path.
 
 Do not send JSON-RPC requests to `.../acp` for HTTP clients.
+
+Recommended APP-facing endpoint:
+
+- `https://xworkmate-bridge.svc.plus/acp/rpc`
 
 Verified public HTTP JSON-RPC endpoints:
 
@@ -146,13 +155,15 @@ Verified result summary:
 - `opencode` long conversation passed
 - `gemini` long conversation passed
 
-This is the current app-integration baseline for `acp-server.svc.plus`.
+This confirms the upstream ACP baseline. The APP-facing baseline remains
+`https://xworkmate-bridge.svc.plus/acp/rpc`.
 
 ## App Integration Notes
 
 ### Recommended request shape
 
-Use JSON-RPC `POST` requests against `.../acp/rpc`.
+For APP integration, use JSON-RPC `POST` requests against
+`https://xworkmate-bridge.svc.plus/acp/rpc`.
 
 For capability discovery:
 

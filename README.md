@@ -11,7 +11,14 @@
 
 ## ACP Forwarding Topology
 
-This repository exposes one bridge entrypoint and forwards to four verified public targets. The full Mermaid diagram lives in [docs/architecture/acp-forwarding-topology.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xworkmate-bridge/docs/architecture/acp-forwarding-topology.md).
+This repository exposes one APP-facing bridge entrypoint and proxies traffic
+to four independent upstream production services. The APP-facing canonical ACP
+paths remain `/acp/rpc` and `/acp` under
+`https://xworkmate-bridge.svc.plus`.
+
+Architecture topology: [docs/architecture/acp-forwarding-topology.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xworkmate-bridge/docs/architecture/acp-forwarding-topology.md)
+
+ADR for the unified APP-facing bridge contract: [docs/architecture/adr-unified-bridge-entrypoints.md](/Users/shenlan/workspaces/cloud-neutral-toolkit/xworkmate-bridge/docs/architecture/adr-unified-bridge-entrypoints.md)
 
 Example provider sync config: [example/config.yaml](/Users/shenlan/workspaces/cloud-neutral-toolkit/xworkmate-bridge/example/config.yaml)
 

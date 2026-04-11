@@ -96,6 +96,9 @@ func TestResolveAutoOnlineTaskToGateway(t *testing.T) {
 	if result.ResolvedEndpointTarget != EndpointTargetLocal {
 		t.Fatalf("expected local gateway target, got %#v", result)
 	}
+	if result.ResolvedGatewayProviderID != GatewayProviderLocal {
+		t.Fatalf("expected local gateway provider, got %#v", result)
+	}
 }
 
 func TestResolveComplexTaskUpgradesToMultiAgent(t *testing.T) {
@@ -132,5 +135,31 @@ func TestResolveUsesClassifierForBoundarySamples(t *testing.T) {
 	}
 	if result.ResolvedEndpointTarget != EndpointTargetLocal {
 		t.Fatalf("expected local endpoint target, got %#v", result)
+	}
+	if result.ResolvedGatewayProviderID != GatewayProviderLocal {
+		t.Fatalf("expected local gateway provider, got %#v", result)
+	}
+}
+
+func TestResolveGatewayProviderMapsOpenClawToRemoteEndpoint(t *testing.T) {
+	resolver := Resolver{
+		SkillFinder:    skills.StaticFinder{},
+		SkillInstaller: nil,
+		MemoryService:  memory.Service{},
+	}
+
+	result := resolver.Resolve(Request{
+		Prompt:                     "search the web for latest news",
+		PreferredGatewayProviderID: GatewayProviderOpenClaw,
+	})
+
+	if result.ResolvedExecutionTarget != ExecutionTargetGateway {
+		t.Fatalf("expected gateway route, got %#v", result)
+	}
+	if result.ResolvedGatewayProviderID != GatewayProviderOpenClaw {
+		t.Fatalf("expected openclaw gateway provider, got %#v", result)
+	}
+	if result.ResolvedEndpointTarget != EndpointTargetRemote {
+		t.Fatalf("expected remote endpoint target for openclaw, got %#v", result)
 	}
 }

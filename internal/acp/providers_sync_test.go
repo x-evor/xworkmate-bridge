@@ -38,8 +38,15 @@ func TestCapabilitiesExposeBuiltInProductionProviderCatalog(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected providerCatalog array, got %#v", result)
 	}
+	gatewayProviders, ok := result["gatewayProviders"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected gatewayProviders array, got %#v", result)
+	}
 	if len(providerCatalog) != 3 {
 		t.Fatalf("expected 3 built-in providers, got %#v", providerCatalog)
+	}
+	if len(gatewayProviders) != 2 {
+		t.Fatalf("expected 2 built-in gateway providers, got %#v", gatewayProviders)
 	}
 	wantOrder := []string{"codex", "opencode", "gemini"}
 	wantLabels := []string{"Codex", "OpenCode", "Gemini"}
@@ -49,6 +56,16 @@ func TestCapabilitiesExposeBuiltInProductionProviderCatalog(t *testing.T) {
 		}
 		if got := providerCatalog[index]["label"]; got != wantLabels[index] {
 			t.Fatalf("expected label %q at index %d, got %#v", wantLabels[index], index, providerCatalog)
+		}
+	}
+	wantGatewayOrder := []string{"local", "openclaw"}
+	wantGatewayLabels := []string{"Local", "OpenClaw"}
+	for index, want := range wantGatewayOrder {
+		if got := gatewayProviders[index]["providerId"]; got != want {
+			t.Fatalf("expected gateway provider %q at index %d, got %#v", want, index, gatewayProviders)
+		}
+		if got := gatewayProviders[index]["label"]; got != wantGatewayLabels[index] {
+			t.Fatalf("expected gateway label %q at index %d, got %#v", wantGatewayLabels[index], index, gatewayProviders)
 		}
 	}
 }

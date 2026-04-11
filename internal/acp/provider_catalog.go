@@ -3,6 +3,7 @@ package acp
 import (
 	"strings"
 
+	"xworkmate-bridge/internal/router"
 	"xworkmate-bridge/internal/shared"
 )
 
@@ -111,4 +112,17 @@ func providerLabel(provider syncedProvider) string {
 		return label
 	}
 	return provider.ProviderID
+}
+
+func availableGatewayProviderCatalog() []map[string]any {
+	return []map[string]any{
+		{
+			"providerId": router.GatewayProviderLocal,
+			"label":      "Local",
+		},
+		{
+			"providerId": router.GatewayProviderOpenClaw,
+			"label":      "OpenClaw",
+		},
+	}
 }

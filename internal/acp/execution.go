@@ -44,6 +44,9 @@ func buildResolvedExecutionParams(
 	if strings.TrimSpace(resolved.ResolvedProviderID) != "" {
 		next["provider"] = strings.TrimSpace(resolved.ResolvedProviderID)
 	}
+	if strings.TrimSpace(resolved.ResolvedGatewayProviderID) != "" {
+		next["gatewayProvider"] = strings.TrimSpace(resolved.ResolvedGatewayProviderID)
+	}
 	if strings.TrimSpace(resolved.ResolvedModel) != "" {
 		next["model"] = strings.TrimSpace(resolved.ResolvedModel)
 	}
@@ -53,6 +56,7 @@ func buildResolvedExecutionParams(
 	next["resolvedExecutionTarget"] = resolved.ResolvedExecutionTarget
 	next["resolvedEndpointTarget"] = resolved.ResolvedEndpointTarget
 	next["resolvedProviderId"] = resolved.ResolvedProviderID
+	next["resolvedGatewayProviderId"] = resolved.ResolvedGatewayProviderID
 	next["resolvedModel"] = resolved.ResolvedModel
 	next["resolvedSkills"] = append([]string(nil), resolved.ResolvedSkills...)
 	return next
@@ -178,6 +182,7 @@ func sanitizeExternalACPParams(method string, params map[string]any) map[string]
 	delete(next, "resolvedExecutionTarget")
 	delete(next, "resolvedEndpointTarget")
 	delete(next, "resolvedProviderId")
+	delete(next, "resolvedGatewayProviderId")
 	delete(next, "resolvedModel")
 	delete(next, "resolvedSkills")
 	delete(next, inboundAuthorizationHeaderKey)
