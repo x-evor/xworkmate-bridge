@@ -19,13 +19,13 @@ func TestHandleBridgeBootstrapConsumeReturnsSetupCode(t *testing.T) {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(accountsBridgeBootstrapConsumeResponse{
-			TicketID:      "ticket-1",
-			TargetBridge:  "https://xworkmate-bridge.svc.plus",
-			OpenclawURL:   "wss://openclaw.svc.plus",
-			AuthMode:      "shared-token",
-			ExchangeToken: "shared-token-value",
-			ExpiresAt:     "2026-04-10T00:00:00Z",
-			Scopes:        []string{"connect", "pairing.bootstrap"},
+			TicketID:        "ticket-1",
+			TargetBridge:    "https://xworkmate-bridge.svc.plus",
+			BridgeServerURL: "https://xworkmate-bridge.svc.plus",
+			AuthMode:        "shared-token",
+			BridgeAuthToken: "shared-token-value",
+			ExpiresAt:       "2026-04-10T00:00:00Z",
+			Scopes:          []string{"connect", "pairing.bootstrap"},
 		})
 	}))
 	defer accounts.Close()
@@ -55,10 +55,16 @@ func TestHandleBridgeBootstrapConsumeReturnsSetupCode(t *testing.T) {
 	if err := json.Unmarshal([]byte(payload.SetupCode), &decoded); err != nil {
 		t.Fatalf("decode setup code payload: %v", err)
 	}
-	if decoded["url"] != "wss://openclaw.svc.plus" {
-		t.Fatalf("expected openclaw url in setup payload, got %#v", decoded)
+	if decoded["url"] != "https://xworkmate-bridge.svc.plus" {
+		t.Fatalf("expected bridge server url in setup payload, got %#v", decoded)
 	}
 	if decoded["token"] != "shared-token-value" {
-		t.Fatalf("expected exchange token in setup payload, got %#v", decoded)
+		t.Fatalf("expected bridge auth token in setup payload, got %#v", decoded)
+	}
+	if decoded["BRIDGE_SERVER_URL"] != "https://xworkmate-bridge.svc.plus" {
+		t.Fatalf("expected BRIDGE_SERVER_URL in setup payload, got %#v", decoded)
+	}
+	if decoded["BRIDGE_AUTH_TOKEN"] != "shared-token-value" {
+		t.Fatalf("expected BRIDGE_AUTH_TOKEN in setup payload, got %#v", decoded)
 	}
 }
