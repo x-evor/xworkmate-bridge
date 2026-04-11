@@ -246,11 +246,6 @@ func mapExplicitTarget(
 	}
 }
 
-func normalizeGatewayTarget(value string) string {
-	_, endpointTarget := resolveGatewayRouting("", value)
-	return endpointTarget
-}
-
 func resolveGatewayRouting(preferredGatewayProviderID, preferredGatewayTarget string) (string, string) {
 	providerID := normalizeGatewayProvider(preferredGatewayProviderID)
 	if providerID == "" {

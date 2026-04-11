@@ -14,8 +14,6 @@ const (
 	productionGeminiEndpointURL   = "https://acp-server.svc.plus/gemini/acp/rpc"
 )
 
-var productionProviderOrder = []string{"codex", "opencode", "gemini"}
-
 type syncedProvider struct {
 	ProviderID          string
 	Label               string
