@@ -53,6 +53,7 @@ func handleGatewayConnect(
 			Password:    strings.TrimSpace(shared.StringArg(asMap(params["auth"]), "password", "")),
 		},
 	}
+	request = applyProductionGatewayRouting(request)
 	request.ReportedRemoteAddress = resolveGatewayReportedRemoteAddress(server, request)
 	result := server.gateway.Connect(request, notify)
 	return map[string]any{
@@ -62,6 +63,28 @@ func handleGatewayConnect(
 		"returnedDeviceToken": result.ReturnedDeviceToken,
 		"error":               result.Error,
 	}
+}
+
+func applyProductionGatewayRouting(
+	request gatewayruntime.ConnectRequest,
+) gatewayruntime.ConnectRequest {
+	if strings.TrimSpace(strings.ToLower(request.Mode)) != "remote" {
+		return request
+	}
+	request.Endpoint = gatewayruntime.Endpoint{
+		Host: "openclaw.svc.plus",
+		Port: 443,
+		TLS:  true,
+	}
+	request.Auth.Token = strings.TrimSpace(
+		shared.EnvOrDefault("INTERNAL_SERVICE_TOKEN", ""),
+	)
+	request.Auth.Password = ""
+	request.ConnectAuthMode = "shared-token"
+	request.ConnectAuthFields = []string{"token"}
+	request.ConnectAuthSources = []string{"bridge"}
+	request.HasSharedAuth = request.Auth.Token != ""
+	return request
 }
 
 func handleGatewayRequest(
@@ -167,28 +190,8 @@ func resolveGatewayReportedRemoteAddress(
 	if strings.TrimSpace(strings.ToLower(request.Mode)) != "remote" {
 		return ""
 	}
-	if !shouldOverrideGatewayReportedRemoteAddress(request.Endpoint.Host) {
-		return ""
-	}
-	if server != nil {
-		if provider, ok := server.syncedProviderByID("openclaw"); ok {
-			if reported := publicEndpointAddressLabel(provider.Endpoint); reported != "" {
-				return reported
-			}
-		}
-	}
-	return publicEndpointAddressLabel(
-		shared.EnvOrDefault("OPENCLAW_URL", "wss://openclaw.svc.plus"),
-	)
-}
-
-func shouldOverrideGatewayReportedRemoteAddress(host string) bool {
-	switch strings.TrimSpace(strings.ToLower(host)) {
-	case "127.0.0.1", "localhost", "::1", "xworkmate-bridge.svc.plus":
-		return true
-	default:
-		return false
-	}
+	_ = server
+	return publicEndpointAddressLabel(productionGatewayEndpointURL)
 }
 
 func publicEndpointAddressLabel(raw string) string {

@@ -13,80 +13,19 @@ import (
 	"xworkmate-bridge/internal/shared"
 )
 
-func TestProvidersSyncUpdatesCapabilities(t *testing.T) {
-	server := NewServer()
-
-	_, rpcErr := server.handleRequest(shared.RPCRequest{
-		Method: "xworkmate.providers.sync",
-		Params: map[string]any{
-			"providers": []any{
-				map[string]any{
-					"providerId":          "claude",
-					"label":               "Claude",
-					"endpoint":            "http://127.0.0.1:9999",
-					"authorizationHeader": "Bearer test",
-					"enabled":             true,
-				},
-			},
-		},
-	}, func(map[string]any) {})
-	if rpcErr != nil {
-		t.Fatalf("expected sync success, got %v", rpcErr)
+func setTestBridgeProvider(server *Server, provider syncedProvider) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	if server.providerCatalog == nil {
+		server.providerCatalog = map[string]syncedProvider{}
 	}
-
-	result, rpcErr := server.handleRequest(shared.RPCRequest{
-		Method: "acp.capabilities",
-		Params: map[string]any{},
-	}, func(map[string]any) {})
-	if rpcErr != nil {
-		t.Fatalf("expected capabilities success, got %v", rpcErr)
-	}
-	providerCatalog, ok := result["providerCatalog"].([]map[string]any)
-	if !ok || len(providerCatalog) == 0 {
-		t.Fatalf("expected synced provider in capabilities, got %#v", result)
-	}
-	if providerCatalog[0]["providerId"] != "claude" {
-		t.Fatalf("expected claude provider after sync, got %#v", providerCatalog)
-	}
-	if providerCatalog[0]["label"] != "Claude" {
-		t.Fatalf("expected Claude label after sync, got %#v", providerCatalog)
-	}
+	providerID := strings.TrimSpace(provider.ProviderID)
+	provider.ProviderID = providerID
+	server.providerCatalog[providerID] = provider
 }
 
-func TestProvidersSyncPreservesProviderCatalogOrder(t *testing.T) {
+func TestCapabilitiesExposeBuiltInProductionProviderCatalog(t *testing.T) {
 	server := NewServer()
-
-	_, rpcErr := server.handleRequest(shared.RPCRequest{
-		Method: "xworkmate.providers.sync",
-		Params: map[string]any{
-			"providers": []any{
-				map[string]any{
-					"providerId":          "gemini",
-					"label":               "Gemini",
-					"endpoint":            "http://127.0.0.1:9001",
-					"authorizationHeader": "Bearer gemini",
-					"enabled":             true,
-				},
-				map[string]any{
-					"providerId":          "codex",
-					"label":               "Codex",
-					"endpoint":            "http://127.0.0.1:9002",
-					"authorizationHeader": "Bearer codex",
-					"enabled":             true,
-				},
-				map[string]any{
-					"providerId":          "opencode",
-					"label":               "OpenCode",
-					"endpoint":            "http://127.0.0.1:9003",
-					"authorizationHeader": "Bearer opencode",
-					"enabled":             true,
-				},
-			},
-		},
-	}, func(map[string]any) {})
-	if rpcErr != nil {
-		t.Fatalf("expected sync success, got %v", rpcErr)
-	}
 
 	result, rpcErr := server.handleRequest(shared.RPCRequest{
 		Method: "acp.capabilities",
@@ -100,22 +39,37 @@ func TestProvidersSyncPreservesProviderCatalogOrder(t *testing.T) {
 		t.Fatalf("expected providerCatalog array, got %#v", result)
 	}
 	if len(providerCatalog) != 3 {
-		t.Fatalf("expected 3 catalog entries, got %#v", providerCatalog)
+		t.Fatalf("expected 3 built-in providers, got %#v", providerCatalog)
 	}
-	gotOrder := []string{
-		providerCatalog[0]["providerId"].(string),
-		providerCatalog[1]["providerId"].(string),
-		providerCatalog[2]["providerId"].(string),
-	}
-	wantOrder := []string{"gemini", "codex", "opencode"}
+	wantOrder := []string{"codex", "opencode", "gemini"}
+	wantLabels := []string{"Codex", "OpenCode", "Gemini"}
 	for index, want := range wantOrder {
-		if gotOrder[index] != want {
-			t.Fatalf("expected provider order %#v, got %#v", wantOrder, gotOrder)
+		if got := providerCatalog[index]["providerId"]; got != want {
+			t.Fatalf("expected provider %q at index %d, got %#v", want, index, providerCatalog)
+		}
+		if got := providerCatalog[index]["label"]; got != wantLabels[index] {
+			t.Fatalf("expected label %q at index %d, got %#v", wantLabels[index], index, providerCatalog)
 		}
 	}
 }
 
-func TestExecuteSessionTaskUsesSyncedExternalProvider(t *testing.T) {
+func TestProvidersSyncMethodIsRemovedFromProductionFlow(t *testing.T) {
+	server := NewServer()
+	_, rpcErr := server.handleRequest(shared.RPCRequest{
+		Method: "xworkmate.providers.sync",
+	}, func(map[string]any) {})
+	if rpcErr == nil {
+		t.Fatalf("expected xworkmate.providers.sync to be unavailable")
+	}
+	if rpcErr.Code != -32601 {
+		t.Fatalf("expected unknown method error, got %#v", rpcErr)
+	}
+	if !strings.Contains(rpcErr.Message, "xworkmate.providers.sync") {
+		t.Fatalf("expected method name in error, got %#v", rpcErr)
+	}
+}
+
+func TestExecuteSessionTaskUsesBuiltInProductionProvider(t *testing.T) {
 	var lastForwardedParams map[string]any
 	externalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/acp/rpc" {
@@ -140,7 +94,7 @@ func TestExecuteSessionTaskUsesSyncedExternalProvider(t *testing.T) {
 					"success":  true,
 					"output":   "external-provider-ok",
 					"turnId":   "turn-external",
-					"provider": "claude",
+					"provider": "codex",
 					"mode":     "single-agent",
 				},
 			})
@@ -155,14 +109,13 @@ func TestExecuteSessionTaskUsesSyncedExternalProvider(t *testing.T) {
 	defer externalServer.Close()
 
 	server := NewServer()
-	server.syncProviders([]syncedProvider{
-		{
-			ProviderID:          "claude",
-			Label:               "Claude",
-			Endpoint:            externalServer.URL,
-			AuthorizationHeader: "Bearer test",
-			Enabled:             true,
-		},
+	t.Setenv("INTERNAL_SERVICE_TOKEN", "internal-test-token")
+	setTestBridgeProvider(server, syncedProvider{
+		ProviderID:          "codex",
+		Label:               "Codex",
+		Endpoint:            externalServer.URL,
+		AuthorizationHeader: "Bearer internal-test-token",
+		Enabled:             true,
 	})
 
 	response, rpcErr := server.executeSessionTask(task{
@@ -176,7 +129,7 @@ func TestExecuteSessionTaskUsesSyncedExternalProvider(t *testing.T) {
 				"routing": map[string]any{
 					"routingMode":             "explicit",
 					"explicitExecutionTarget": "singleAgent",
-					"explicitProviderId":      "claude",
+					"explicitProviderId":      "codex",
 				},
 			},
 		},
@@ -187,14 +140,11 @@ func TestExecuteSessionTaskUsesSyncedExternalProvider(t *testing.T) {
 	if got := response["output"]; got != "external-provider-ok" {
 		t.Fatalf("expected external provider output, got %#v", response)
 	}
-	if got := response["resolvedProviderId"]; got != "claude" {
-		t.Fatalf("expected resolved provider claude, got %#v", response)
+	if got := response["resolvedProviderId"]; got != "codex" {
+		t.Fatalf("expected resolved provider codex, got %#v", response)
 	}
 	if _, exists := lastForwardedParams["metadata"]; exists {
 		t.Fatalf("expected metadata to be stripped for external provider request, got %#v", lastForwardedParams)
-	}
-	if _, exists := lastForwardedParams[externalProviderEndpointKey]; exists {
-		t.Fatalf("expected internal endpoint key to be stripped, got %#v", lastForwardedParams)
 	}
 }
 
@@ -240,14 +190,12 @@ func TestExecuteSessionTaskEnrichesExternalProviderResultWithArtifactsAndRemoteM
 	defer externalServer.Close()
 
 	server := NewServer()
-	server.syncProviders([]syncedProvider{
-		{
-			ProviderID:          "claude",
-			Label:               "Claude",
-			Endpoint:            externalServer.URL,
-			AuthorizationHeader: "Bearer test",
-			Enabled:             true,
-		},
+	setTestBridgeProvider(server, syncedProvider{
+		ProviderID:          "codex",
+		Label:               "Codex",
+		Endpoint:            externalServer.URL,
+		AuthorizationHeader: "Bearer internal-test-token",
+		Enabled:             true,
 	})
 
 	response, rpcErr := server.executeSessionTask(task{
@@ -261,7 +209,7 @@ func TestExecuteSessionTaskEnrichesExternalProviderResultWithArtifactsAndRemoteM
 				"routing": map[string]any{
 					"routingMode":             "explicit",
 					"explicitExecutionTarget": "singleAgent",
-					"explicitProviderId":      "claude",
+					"explicitProviderId":      "codex",
 				},
 			},
 		},
@@ -298,58 +246,6 @@ func TestExecuteSessionTaskEnrichesExternalProviderResultWithArtifactsAndRemoteM
 	}
 }
 
-func TestRunSingleAgentUsesFrozenExternalProviderParams(t *testing.T) {
-	externalServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/acp/rpc" {
-			http.NotFound(w, r)
-			return
-		}
-		defer func() {
-			_ = r.Body.Close()
-		}()
-		var request map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatalf("decode request: %v", err)
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"jsonrpc": "2.0",
-			"id":      request["id"],
-			"result": map[string]any{
-				"success":  true,
-				"output":   "frozen-provider-ok",
-				"turnId":   "turn-frozen",
-				"provider": "custom-agent-1",
-				"mode":     "single-agent",
-			},
-		})
-	}))
-	defer externalServer.Close()
-
-	server := NewServer()
-	session := server.getOrCreateSession("session-frozen", "thread-frozen")
-	result := server.runSingleAgent(
-		context.Background(),
-		"session.start",
-		session,
-		map[string]any{
-			"provider":                             "custom-agent-1",
-			"taskPrompt":                           "hello",
-			"workingDirectory":                     t.TempDir(),
-			externalProviderEndpointKey:            externalServer.URL,
-			externalProviderAuthorizationHeaderKey: "Bearer test",
-			externalProviderLabelKey:               "Codex",
-		},
-		"turn-frozen",
-		func(map[string]any) {},
-	)
-	if result.err != nil {
-		t.Fatalf("expected success, got rpc error: %v", result.err)
-	}
-	if got := result.response["output"]; got != "frozen-provider-ok" {
-		t.Fatalf("expected frozen provider output, got %#v", result.response)
-	}
-}
-
 func TestRunSingleAgentRequiresAdvertisedProvider(t *testing.T) {
 	server := NewServer()
 	session := server.getOrCreateSession("session-local", "thread-local")
@@ -358,7 +254,7 @@ func TestRunSingleAgentRequiresAdvertisedProvider(t *testing.T) {
 		"session.start",
 		session,
 		map[string]any{
-			"provider":         "opencode",
+			"provider":         "claude",
 			"taskPrompt":       "hello",
 			"workingDirectory": filepath.Join(t.TempDir(), "missing"),
 		},
@@ -392,14 +288,15 @@ func TestHandleRPCRequiresExplicitBearerForExternalProvider(t *testing.T) {
 	}))
 	defer externalServer.Close()
 
+	t.Setenv("INTERNAL_SERVICE_TOKEN", "synced-provider-token")
 	server := NewServer()
-	server.syncProviders([]syncedProvider{{
+	setTestBridgeProvider(server, syncedProvider{
 		ProviderID:          "codex",
 		Label:               "Codex",
 		Endpoint:            externalServer.URL,
 		AuthorizationHeader: "Bearer synced-provider-token",
 		Enabled:             true,
-	}})
+	})
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(

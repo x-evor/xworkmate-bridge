@@ -6,18 +6,10 @@ import (
 	"xworkmate-bridge/internal/gatewayruntime"
 )
 
-func TestResolveGatewayReportedRemoteAddressUsesSyncedOpenClawEndpoint(t *testing.T) {
+func TestResolveGatewayReportedRemoteAddressUsesBuiltInOpenClawEndpoint(t *testing.T) {
 	t.Parallel()
 
 	server := NewServer()
-	server.syncProviders([]syncedProvider{
-		{
-			ProviderID: "openclaw",
-			Label:      "OpenClaw",
-			Endpoint:   "wss://gateway.example.com",
-			Enabled:    true,
-		},
-	})
 
 	got := resolveGatewayReportedRemoteAddress(server, gatewayruntime.ConnectRequest{
 		Mode: "remote",
@@ -28,13 +20,15 @@ func TestResolveGatewayReportedRemoteAddressUsesSyncedOpenClawEndpoint(t *testin
 		},
 	})
 
-	const want = "gateway.example.com:443"
+	const want = "openclaw.svc.plus:443"
 	if got != want {
 		t.Fatalf("resolveGatewayReportedRemoteAddress() = %q, want %q", got, want)
 	}
 }
 
-func TestResolveGatewayReportedRemoteAddressPreservesExplicitPublicRemoteHost(t *testing.T) {
+func TestResolveGatewayReportedRemoteAddressNormalizesExplicitPublicRemoteHost(
+	t *testing.T,
+) {
 	t.Parallel()
 
 	server := NewServer()
@@ -48,7 +42,8 @@ func TestResolveGatewayReportedRemoteAddressPreservesExplicitPublicRemoteHost(t 
 		},
 	})
 
-	if got != "" {
-		t.Fatalf("expected explicit public remote host to bypass override, got %q", got)
+	const want = "openclaw.svc.plus:443"
+	if got != want {
+		t.Fatalf("resolveGatewayReportedRemoteAddress() = %q, want %q", got, want)
 	}
 }

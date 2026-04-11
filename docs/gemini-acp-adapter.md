@@ -103,14 +103,16 @@ xworkmate app / agent manager
         -> stdio child process: gemini --experimental-acp
 ```
 
-The adapter should be registered in bridge provider sync as an external ACP provider:
+The adapter should be registered in the bridge-owned provider catalog as the
+`gemini` single-agent ACP backend:
 
 - `providerId: "gemini"`
 - `label: "Gemini"`
 - `endpoint: http://127.0.0.1:<port>/acp/rpc` or `ws://127.0.0.1:<port>/acp`
 - `enabled: true`
 
-`xworkmate-bridge` already supports this provider shape through `xworkmate.providers.sync`.
+In production, `xworkmate-bridge` exposes `gemini` from its built-in provider
+catalog rather than from app-driven sync.
 
 ## Adapter Responsibilities
 
@@ -302,25 +304,17 @@ If Gemini ACP later gains a compatible conversation method, you can override the
 export GEMINI_ADAPTER_UPSTREAM_METHOD=your-discovered-gemini-method
 ```
 
-## Bridge Provider Sync Example
+## Bridge Provider Catalog Example
 
-Once the adapter is running, register it as a normal external provider:
+Once the adapter is running, expose it from the bridge-owned provider catalog
+as the `gemini` backend:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": "providers-sync-1",
-  "method": "xworkmate.providers.sync",
-  "params": {
-    "providers": [
-      {
-        "providerId": "gemini",
-        "label": "Gemini",
-        "endpoint": "http://127.0.0.1:8791/acp/rpc",
-        "enabled": true
-      }
-    ]
-  }
+  "providerId": "gemini",
+  "label": "Gemini",
+  "endpoint": "http://127.0.0.1:8791/acp/rpc",
+  "enabled": true
 }
 ```
 
@@ -333,23 +327,15 @@ Example local startup and sync flow:
   --gemini-args="--experimental-acp"
 ```
 
-Then sync this provider into the bridge:
+Then wire the bridge startup/runtime config so the built-in `gemini` catalog
+entry points at this adapter endpoint:
 
 ```json
 {
-  "jsonrpc": "2.0",
-  "id": "providers-sync-gemini",
-  "method": "xworkmate.providers.sync",
-  "params": {
-    "providers": [
-      {
-        "providerId": "gemini",
-        "label": "Gemini",
-        "endpoint": "http://127.0.0.1:8791",
-        "enabled": true
-      }
-    ]
-  }
+  "providerId": "gemini",
+  "label": "Gemini",
+  "endpoint": "http://127.0.0.1:8791",
+  "enabled": true
 }
 ```
 

@@ -2,7 +2,18 @@ package acp
 
 import (
 	"strings"
+
+	"xworkmate-bridge/internal/shared"
 )
+
+const (
+	productionGatewayEndpointURL  = "wss://openclaw.svc.plus"
+	productionCodexEndpointURL    = "https://acp-server.svc.plus/codex/acp/rpc"
+	productionOpenCodeEndpointURL = "https://acp-server.svc.plus/opencode/acp/rpc"
+	productionGeminiEndpointURL   = "https://acp-server.svc.plus/gemini/acp/rpc"
+)
+
+var productionProviderOrder = []string{"codex", "opencode", "gemini"}
 
 type syncedProvider struct {
 	ProviderID          string
@@ -12,47 +23,40 @@ type syncedProvider struct {
 	Enabled             bool
 }
 
-func parseSyncedProviders(raw any) []syncedProvider {
-	list, ok := raw.([]any)
-	if !ok {
-		return nil
+func newProductionProviderCatalog() (map[string]syncedProvider, []string) {
+	authorizationHeader := normalizeAuthorizationHeader(
+		strings.TrimSpace(shared.EnvOrDefault("INTERNAL_SERVICE_TOKEN", "")),
+	)
+	providers := []syncedProvider{
+		{
+			ProviderID:          "codex",
+			Label:               "Codex",
+			Endpoint:            productionCodexEndpointURL,
+			AuthorizationHeader: authorizationHeader,
+			Enabled:             true,
+		},
+		{
+			ProviderID:          "opencode",
+			Label:               "OpenCode",
+			Endpoint:            productionOpenCodeEndpointURL,
+			AuthorizationHeader: authorizationHeader,
+			Enabled:             true,
+		},
+		{
+			ProviderID:          "gemini",
+			Label:               "Gemini",
+			Endpoint:            productionGeminiEndpointURL,
+			AuthorizationHeader: authorizationHeader,
+			Enabled:             true,
+		},
 	}
-	providers := make([]syncedProvider, 0, len(list))
-	for _, item := range list {
-		entry := asMap(item)
-		providerID := strings.TrimSpace(sharedString(entry, "providerId"))
-		if providerID == "" {
-			continue
-		}
-		providers = append(providers, syncedProvider{
-			ProviderID:          providerID,
-			Label:               strings.TrimSpace(sharedString(entry, "label")),
-			Endpoint:            strings.TrimSpace(sharedString(entry, "endpoint")),
-			AuthorizationHeader: strings.TrimSpace(sharedString(entry, "authorizationHeader")),
-			Enabled:             parseBool(entry["enabled"]),
-		})
-	}
-	return providers
-}
-
-func (s *Server) syncProviders(providers []syncedProvider) map[string]any {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.providerCatalog = make(map[string]syncedProvider, len(providers))
-	s.providerOrder = make([]string, 0, len(providers))
+	catalog := make(map[string]syncedProvider, len(providers))
+	order := make([]string, 0, len(providers))
 	for _, provider := range providers {
-		providerID := strings.TrimSpace(provider.ProviderID)
-		if providerID == "" {
-			continue
-		}
-		provider.ProviderID = providerID
-		s.providerCatalog[providerID] = provider
-		s.providerOrder = append(s.providerOrder, providerID)
+		catalog[provider.ProviderID] = provider
+		order = append(order, provider.ProviderID)
 	}
-	return map[string]any{
-		"ok":        true,
-		"providers": syncedProvidersResult(providers),
-	}
+	return catalog, order
 }
 
 func (s *Server) syncedProviderByID(providerID string) (syncedProvider, bool) {
@@ -97,19 +101,6 @@ func (s *Server) availableProviderCatalog() []map[string]any {
 		result = append(result, map[string]any{
 			"providerId": provider.ProviderID,
 			"label":      providerLabel(provider),
-		})
-	}
-	return result
-}
-
-func syncedProvidersResult(providers []syncedProvider) []map[string]any {
-	result := make([]map[string]any, 0, len(providers))
-	for _, provider := range providers {
-		result = append(result, map[string]any{
-			"providerId": provider.ProviderID,
-			"label":      providerLabel(provider),
-			"endpoint":   provider.Endpoint,
-			"enabled":    provider.Enabled,
 		})
 	}
 	return result

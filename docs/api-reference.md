@@ -86,7 +86,6 @@ The bridge currently handles these methods:
 | `session.close` | Close session state |
 | `xworkmate.dispatch.resolve` | Resolve provider choice from candidate providers and requirements |
 | `xworkmate.routing.resolve` | Resolve execution target / provider / skills from routing metadata |
-| `xworkmate.providers.sync` | Sync external single-agent provider catalog into the bridge |
 | `xworkmate.mounts.reconcile` | Reconcile managed MCP configuration and mount-related settings |
 | `xworkmate.gateway.connect` | Connect bridge runtime to gateway |
 | `xworkmate.gateway.request` | Send a request to the connected gateway runtime |
@@ -119,16 +118,16 @@ Response shape:
     "multiAgent": true,
     "providerCatalog": [
       { "providerId": "codex", "label": "Codex" },
-      { "providerId": "gemini", "label": "Gemini" },
-      { "providerId": "opencode", "label": "OpenCode" }
+      { "providerId": "opencode", "label": "OpenCode" },
+      { "providerId": "gemini", "label": "Gemini" }
     ],
     "capabilities": {
       "single_agent": true,
       "multi_agent": true,
       "providerCatalog": [
         { "providerId": "codex", "label": "Codex" },
-        { "providerId": "gemini", "label": "Gemini" },
-        { "providerId": "opencode", "label": "OpenCode" }
+        { "providerId": "opencode", "label": "OpenCode" },
+        { "providerId": "gemini", "label": "Gemini" }
       ]
     }
   }
@@ -137,9 +136,12 @@ Response shape:
 
 Notes:
 
-- `providerCatalog` comes from the synced external provider catalog registered
-  through `xworkmate.providers.sync`
-- provider order is bridge-owned and preserves the sync order
+- `providerCatalog` is bridge-owned and built in at startup
+- production provider map is fixed to:
+  - `codex` -> `https://acp-server.svc.plus/codex/acp/rpc`
+  - `opencode` -> `https://acp-server.svc.plus/opencode/acp/rpc`
+  - `gemini` -> `https://acp-server.svc.plus/gemini/acp/rpc`
+- upstream ACP auth uses `Authorization: Bearer $INTERNAL_SERVICE_TOKEN`
 - `multiAgent` is controlled by `ACP_MULTI_AGENT_ENABLED`, default `true`
 
 ### 3.2 `session.start`
@@ -343,58 +345,7 @@ Representative response fields:
 - `skillCandidates`
 - `memorySources`
 
-### 3.8 `xworkmate.providers.sync`
-
-Purpose:
-
-- register external ACP single-agent providers into the bridge
-
-Request example:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "sync-1",
-  "method": "xworkmate.providers.sync",
-  "params": {
-    "providers": [
-      {
-        "providerId": "opencode",
-        "label": "OpenCode",
-        "endpoint": "https://acp-server.svc.plus/opencode/acp/rpc",
-        "authorizationHeader": "Bearer ${OPENCODE_AUTH_TOKEN}",
-        "enabled": true
-      }
-    ]
-  }
-}
-```
-
-Provider fields:
-
-- `providerId`
-- `label`
-- `endpoint`
-- `authorizationHeader`
-- `enabled`
-
-Response shape:
-
-```json
-{
-  "ok": true,
-  "providers": [
-    {
-      "providerId": "opencode",
-      "label": "OpenCode",
-      "endpoint": "https://acp-server.svc.plus/opencode/acp/rpc",
-      "enabled": true
-    }
-  ]
-}
-```
-
-### 3.9 `xworkmate.mounts.reconcile`
+### 3.8 `xworkmate.mounts.reconcile`
 
 Purpose:
 
@@ -423,13 +374,13 @@ Managed MCP server item shape:
 }
 ```
 
-### 3.10 Gateway runtime methods
+### 3.9 Gateway runtime methods
 
 #### `xworkmate.gateway.connect`
 
 Purpose:
 
-- connect a bridge runtime session to the gateway runtime
+- connect a bridge runtime session to the bridge-owned production gateway route
 
 Key params:
 
@@ -458,6 +409,13 @@ Response fields:
 - `auth`
 - `returnedDeviceToken`
 - `error`
+
+Notes:
+
+- for `mode=remote`, the bridge overrides runtime endpoint selection to
+  `wss://openclaw.svc.plus`
+- upstream gateway auth uses `Authorization: Bearer $INTERNAL_SERVICE_TOKEN`
+- the app does not provide production openclaw endpoint truth
 
 #### `xworkmate.gateway.request`
 
