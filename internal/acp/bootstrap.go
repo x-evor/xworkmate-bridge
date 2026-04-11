@@ -17,13 +17,13 @@ type bridgeBootstrapConsumeRequest struct {
 }
 
 type accountsBridgeBootstrapConsumeResponse struct {
-	TicketID      string   `json:"ticketId"`
-	TargetBridge  string   `json:"targetBridge"`
-	OpenclawURL   string   `json:"openclawUrl"`
-	AuthMode      string   `json:"authMode"`
-	ExchangeToken string   `json:"exchangeToken"`
-	ExpiresAt     string   `json:"expiresAt"`
-	Scopes        []string `json:"scopes"`
+	TicketID        string   `json:"ticketId"`
+	TargetBridge    string   `json:"targetBridge"`
+	BridgeServerURL string   `json:"BRIDGE_SERVER_URL"`
+	AuthMode        string   `json:"authMode"`
+	BridgeAuthToken string   `json:"BRIDGE_AUTH_TOKEN"`
+	ExpiresAt       string   `json:"expiresAt"`
+	Scopes          []string `json:"scopes"`
 }
 
 type bridgeBootstrapResponse struct {
@@ -75,13 +75,14 @@ func (s *Server) HandleBridgeBootstrapConsume(w http.ResponseWriter, r *http.Req
 	}
 
 	setupCodePayload := map[string]any{
-		"url":           payload.OpenclawURL,
-		"token":         payload.ExchangeToken,
-		"exchangeToken": payload.ExchangeToken,
-		"authMode":      payload.AuthMode,
-		"expiresAt":     payload.ExpiresAt,
-		"bridgeOrigin":  req.Bridge,
-		"issuedBy":      "xworkmate-bridge",
+		"url":               payload.BridgeServerURL,
+		"token":             payload.BridgeAuthToken,
+		"BRIDGE_SERVER_URL": payload.BridgeServerURL,
+		"BRIDGE_AUTH_TOKEN": payload.BridgeAuthToken,
+		"authMode":          payload.AuthMode,
+		"expiresAt":         payload.ExpiresAt,
+		"bridgeOrigin":      req.Bridge,
+		"issuedBy":          "xworkmate-bridge",
 	}
 	setupCodeBytes, err := json.Marshal(setupCodePayload)
 	if err != nil {
