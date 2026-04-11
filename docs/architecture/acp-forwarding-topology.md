@@ -1,55 +1,50 @@
 # ACP Forwarding Topology
 
-This document describes how `xworkmate-bridge.svc.plus` forwards requests to the public ACP and gateway endpoints.
+This document describes the bridge-only production forwarding model for `xworkmate-bridge.svc.plus`.
 
 ## Topology
 
 ```mermaid
 flowchart TD
-  U[Client / App] --> B[xworkmate-bridge.svc.plus]
+  U["xworkmate-app"] --> B["https://xworkmate-bridge.svc.plus"]
 
-  B -->|HTTP POST /acp/rpc| ACPRPC[ACP HTTP RPC handler]
-  B -->|WebSocket /acp| ACPWS[ACP WebSocket handler]
+  B -->|POST /acp/rpc| RPC["ACP RPC handler"]
+  B -->|WS /acp| WS["ACP WebSocket handler"]
 
-  ACPRPC --> R{Method?}
-  ACPWS --> R
+  RPC --> R{"method"}
+  WS --> R
 
-  R -->|acp.capabilities| CAP[Return available provider list]
-  R -->|session.start / session.message| ENQ[Resolve routing and enqueue turn]
-  R -->|session.cancel / session.close| LIFE[Session lifecycle control]
-  R -->|xworkmate.providers.sync| SYNC[Sync external provider catalog]
-  R -->|xworkmate.gateway.*| GWAPI[Gateway control methods]
-  R -->|xworkmate.dispatch.resolve| DISPATCH[Dispatch resolution]
-  R -->|xworkmate.routing.resolve| ROUTE[Routing resolution]
+  R -->|acp.capabilities| CAP["built-in provider catalog"]
+  R -->|xworkmate.routing.resolve| ROUTE["bridge-owned routing resolve"]
+  R -->|session.start / session.message| RUN["bridge-owned execution"]
+  R -->|xworkmate.gateway.*| GWAPI["gateway runtime proxy"]
+  R -->|session.cancel / session.close| LIFE["session lifecycle"]
 
-  ENQ --> D{Resolved execution target}
-  D -->|gateway / openclaw| GW[gatewayruntime.Manager]
-  D -->|singleAgent + codex| C[codex provider]
-  D -->|singleAgent + opencode| O[opencode provider]
-  D -->|singleAgent + gemini| G[gemini provider]
+  RUN --> ACP1["codex -> https://acp-server.svc.plus/codex/acp/rpc"]
+  RUN --> ACP2["opencode -> https://acp-server.svc.plus/opencode/acp/rpc"]
+  RUN --> ACP3["gemini -> https://acp-server.svc.plus/gemini/acp/rpc"]
 
-  GW --> OCLAW[wss://openclaw.svc.plus]
-  C --> CODR[https://acp-server.svc.plus/codex/acp/rpc]
-  O --> OPR[https://acp-server.svc.plus/opencode/acp/rpc]
-  G --> GMR[https://acp-server.svc.plus/gemini/acp/rpc]
-
-  SYNC --> CAT[providerCatalog]
-  CAT --> C
-  CAT --> O
-  CAT --> G
+  GWAPI --> GW["wss://openclaw.svc.plus"]
 ```
 
-## Request Flow
+## Production Truth
 
-The bridge accepts ACP JSON-RPC over `POST /acp/rpc` and ACP WebSocket traffic over `/acp`.
+Bridge owns the production map:
 
-For `session.start` and `session.message`, the server resolves routing metadata, selects either the gateway runtime or a single-agent provider, and then forwards the turn to the resolved endpoint.
+- `codex` -> `https://acp-server.svc.plus/codex/acp/rpc`
+- `opencode` -> `https://acp-server.svc.plus/opencode/acp/rpc`
+- `gemini` -> `https://acp-server.svc.plus/gemini/acp/rpc`
+- gateway -> `wss://openclaw.svc.plus`
 
-For the public single-agent ACP providers, `http` and `https` endpoints are forwarded as JSON-RPC `POST .../acp/rpc` requests, while `ws` and `wss` endpoints are forwarded as WebSocket ACP sessions on `/acp`.
+Upstream auth is bridge-internal:
 
-## Current Public Endpoints
+- `Authorization: Bearer $INTERNAL_SERVICE_TOKEN`
 
-- `wss://openclaw.svc.plus`
-- `https://acp-server.svc.plus/codex/acp/rpc`
-- `https://acp-server.svc.plus/opencode/acp/rpc`
-- `https://acp-server.svc.plus/gemini/acp/rpc`
+## Invariants
+
+- app-facing cloud entry is only `https://xworkmate-bridge.svc.plus`
+- `acp.capabilities` returns the built-in production catalog
+- no production `xworkmate.providers.sync`
+- no app direct call to `acp-server.svc.plus/*`
+- no app direct call to `openclaw.svc.plus`
+- remote gateway runtime status is reported as `openclaw.svc.plus:443`, but the app still talks only to the bridge

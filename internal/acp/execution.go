@@ -21,10 +21,7 @@ import (
 )
 
 const (
-	externalProviderEndpointKey            = "externalProviderEndpoint"
-	externalProviderAuthorizationHeaderKey = "externalProviderAuthorizationHeader"
-	externalProviderLabelKey               = "externalProviderLabel"
-	inboundAuthorizationHeaderKey          = "bridgeAuthorizationHeader"
+	inboundAuthorizationHeaderKey = "bridgeAuthorizationHeader"
 )
 
 func buildResolvedExecutionParams(
@@ -59,25 +56,6 @@ func buildResolvedExecutionParams(
 	next["resolvedModel"] = resolved.ResolvedModel
 	next["resolvedSkills"] = append([]string(nil), resolved.ResolvedSkills...)
 	return next
-}
-
-func injectResolvedExternalProviderParams(
-	params map[string]any,
-	provider syncedProvider,
-) map[string]any {
-	if params == nil {
-		params = map[string]any{}
-	}
-	if endpoint := strings.TrimSpace(provider.Endpoint); endpoint != "" {
-		params[externalProviderEndpointKey] = endpoint
-	}
-	if authorization := strings.TrimSpace(provider.AuthorizationHeader); authorization != "" {
-		params[externalProviderAuthorizationHeaderKey] = authorization
-	}
-	if label := strings.TrimSpace(provider.Label); label != "" {
-		params[externalProviderLabelKey] = label
-	}
-	return params
 }
 
 func injectInboundAuthorizationHeader(params map[string]any, authorization string) map[string]any {
@@ -184,18 +162,7 @@ func (s *Server) runSingleAgentViaExternalProvider(
 }
 
 func resolveSingleAgentForwardEndpoint(provider syncedProvider) string {
-	endpoint := strings.TrimSpace(provider.Endpoint)
-	if endpoint == "" {
-		return ""
-	}
-	if !strings.Contains(strings.ToLower(endpoint), "xworkmate-bridge.svc.plus") {
-		return endpoint
-	}
-	providerID := strings.TrimSpace(strings.ToLower(provider.ProviderID))
-	if providerID == "" {
-		return endpoint
-	}
-	return fmt.Sprintf("https://acp-server.svc.plus/%s/acp/rpc", providerID)
+	return strings.TrimSpace(provider.Endpoint)
 }
 
 func sanitizeExternalACPParams(method string, params map[string]any) map[string]any {
@@ -213,9 +180,6 @@ func sanitizeExternalACPParams(method string, params map[string]any) map[string]
 	delete(next, "resolvedProviderId")
 	delete(next, "resolvedModel")
 	delete(next, "resolvedSkills")
-	delete(next, externalProviderEndpointKey)
-	delete(next, externalProviderAuthorizationHeaderKey)
-	delete(next, externalProviderLabelKey)
 	delete(next, inboundAuthorizationHeaderKey)
 	// Gateway-only fields are irrelevant in ACP single-agent forwarding.
 	normalizedMethod := strings.TrimSpace(method)
@@ -224,22 +188,6 @@ func sanitizeExternalACPParams(method string, params map[string]any) map[string]
 		delete(next, "agentId")
 	}
 	return next
-}
-
-func externalProviderFromParams(params map[string]any) (syncedProvider, bool) {
-	endpoint := strings.TrimSpace(shared.StringArg(params, externalProviderEndpointKey, ""))
-	if endpoint == "" {
-		return syncedProvider{}, false
-	}
-	return syncedProvider{
-		ProviderID: strings.TrimSpace(shared.StringArg(params, "provider", "")),
-		Label:      strings.TrimSpace(shared.StringArg(params, externalProviderLabelKey, "")),
-		Endpoint:   endpoint,
-		AuthorizationHeader: strings.TrimSpace(
-			shared.StringArg(params, externalProviderAuthorizationHeaderKey, ""),
-		),
-		Enabled: true,
-	}, true
 }
 
 func requestExternalACP(

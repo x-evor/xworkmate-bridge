@@ -19,7 +19,7 @@
   - `resolvedExecutionTarget`
   - `resolvedProviderId`
   - `resolvedEndpointTarget`
-- `xworkmate.providers.sync` 能把 `accounts.svc.plus` 同步来的外部 provider 注入 bridge，并参与后续路由选择。
+- `acp.capabilities` 暴露 bridge 内建的生产 provider catalog，并参与后续路由选择。
 
 ### 2. 典型 Case 层
 
@@ -96,7 +96,7 @@ flutter test test/runtime/app_controller_single_agent_workspace_binding_regressi
 ### 路由发现层断言
 
 - `acp.capabilities` 的 provider 列表来自 bridge 当前环境，而不是本地写死。
-- `xworkmate.providers.sync` 后，新增 provider 能进入能力面与路由面。
+- bridge 内建生产 catalog 包含 `codex / opencode / gemini`，且不依赖 app 侧预同步。
 - `xworkmate.routing.resolve` 在 skill / prompt / target 组合下，返回合理的 provider 与 endpoint target。
 
 ### 执行层断言

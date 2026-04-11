@@ -175,20 +175,20 @@ func TestExecuteSessionTaskAutoRoutingRecordsProjectMemory(t *testing.T) {
 	t.Setenv("HOME", homeDir)
 
 	server := NewServer()
-	providerServer := newExternalSingleAgentProvider(t, "claude", "done")
+	providerServer := newExternalSingleAgentProvider(t, "codex", "done")
 	defer providerServer.Close()
-	server.syncProviders([]syncedProvider{{
-		ProviderID: "claude",
-		Label:      "Claude",
+	setTestBridgeProvider(server, syncedProvider{
+		ProviderID: "codex",
+		Label:      "Codex",
 		Endpoint:   providerServer.URL,
 		Enabled:    true,
-	}})
+	})
 	response, rpcErr := server.executeSessionTask(task{
 		req: shared.RPCRequest{
 			Params: map[string]any{
 				"sessionId":        "session-auto",
 				"threadId":         "thread-auto",
-				"provider":         "claude",
+				"provider":         "codex",
 				"taskPrompt":       "create a powerpoint deck for launch",
 				"workingDirectory": workspaceDir,
 				"routing": map[string]any{
@@ -246,26 +246,26 @@ func TestExecuteSessionTaskExplicitRoutingDoesNotRecordProjectMemory(t *testing.
 	t.Setenv("HOME", homeDir)
 
 	server := NewServer()
-	providerServer := newExternalSingleAgentProvider(t, "claude", "done")
+	providerServer := newExternalSingleAgentProvider(t, "codex", "done")
 	defer providerServer.Close()
-	server.syncProviders([]syncedProvider{{
-		ProviderID: "claude",
-		Label:      "Claude",
+	setTestBridgeProvider(server, syncedProvider{
+		ProviderID: "codex",
+		Label:      "Codex",
 		Endpoint:   providerServer.URL,
 		Enabled:    true,
-	}})
+	})
 	response, rpcErr := server.executeSessionTask(task{
 		req: shared.RPCRequest{
 			Params: map[string]any{
 				"sessionId":        "session-explicit",
 				"threadId":         "thread-explicit",
-				"provider":         "claude",
+				"provider":         "codex",
 				"taskPrompt":       "create a powerpoint deck for launch",
 				"workingDirectory": workspaceDir,
 				"routing": map[string]any{
 					"routingMode":             "explicit",
 					"explicitExecutionTarget": "singleAgent",
-					"explicitProviderId":      "claude",
+					"explicitProviderId":      "codex",
 					"availableSkills": []any{
 						map[string]any{
 							"id":          "pptx",
@@ -330,7 +330,7 @@ func TestExecuteSessionTaskExplicitProviderRequiresAdvertisedBridgeProvider(t *t
 	}
 }
 
-func TestExecuteSessionTaskAutoRoutingUsesBridgeSyncOrderForProviderResolution(t *testing.T) {
+func TestExecuteSessionTaskAutoRoutingUsesBridgeProductionProviderOrder(t *testing.T) {
 	workspaceDir := filepath.Join(t.TempDir(), "workspace")
 	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		t.Fatalf("create workspace: %v", err)
@@ -341,19 +341,17 @@ func TestExecuteSessionTaskAutoRoutingUsesBridgeSyncOrderForProviderResolution(t
 	defer geminiProvider.Close()
 	codexProvider := newExternalSingleAgentProvider(t, "codex", "codex-output")
 	defer codexProvider.Close()
-	server.syncProviders([]syncedProvider{
-		{
-			ProviderID: "gemini",
-			Label:      "Gemini",
-			Endpoint:   geminiProvider.URL,
-			Enabled:    true,
-		},
-		{
-			ProviderID: "codex",
-			Label:      "Codex",
-			Endpoint:   codexProvider.URL,
-			Enabled:    true,
-		},
+	setTestBridgeProvider(server, syncedProvider{
+		ProviderID: "gemini",
+		Label:      "Gemini",
+		Endpoint:   geminiProvider.URL,
+		Enabled:    true,
+	})
+	setTestBridgeProvider(server, syncedProvider{
+		ProviderID: "codex",
+		Label:      "Codex",
+		Endpoint:   codexProvider.URL,
+		Enabled:    true,
 	})
 
 	response, rpcErr := server.executeSessionTask(task{
@@ -382,8 +380,8 @@ func TestExecuteSessionTaskAutoRoutingUsesBridgeSyncOrderForProviderResolution(t
 	if rpcErr != nil {
 		t.Fatalf("expected success, got rpc error: %v", rpcErr)
 	}
-	if got := response["resolvedProviderId"]; got != "gemini" {
-		t.Fatalf("expected resolved provider gemini from bridge order, got %#v", response)
+	if got := response["resolvedProviderId"]; got != "codex" {
+		t.Fatalf("expected resolved provider codex from built-in bridge order, got %#v", response)
 	}
 }
 

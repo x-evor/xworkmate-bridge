@@ -104,12 +104,13 @@ func Serve(args []string) error {
 }
 
 func NewServer() *Server {
+	providerCatalog, providerOrder := newProductionProviderCatalog()
 	return &Server{
 		sessions:        make(map[string]*session),
 		queues:          make(map[string]chan task),
 		gateway:         gatewayruntime.NewManager(),
-		providerCatalog: make(map[string]syncedProvider),
-		providerOrder:   nil,
+		providerCatalog: providerCatalog,
+		providerOrder:   providerOrder,
 		authService:     service.NewStaticTokenAuthService(strings.TrimSpace(shared.EnvOrDefault("ACP_AUTH_TOKEN", ""))),
 	}
 }
@@ -372,8 +373,6 @@ func (s *Server) handleRequest(
 			s.availableProviders(),
 		)
 		return mergeRoutingResponse(map[string]any{"ok": true}, result), nil
-	case "xworkmate.providers.sync":
-		return s.syncProviders(parseSyncedProviders(request.Params["providers"])), nil
 	case "xworkmate.mounts.reconcile":
 		return handleMountReconcile(request.Params), nil
 	case "xworkmate.gateway.connect":
@@ -616,14 +615,6 @@ func (s *Server) executeSessionTask(task task) (map[string]any, *shared.RPCError
 	executionParams := buildResolvedExecutionParams(params, resolvedRouting)
 	mode := strings.TrimSpace(shared.StringArg(executionParams, "mode", "single-agent"))
 	provider := strings.TrimSpace(shared.StringArg(executionParams, "provider", ""))
-	if provider != "" {
-		if syncedProvider, ok := s.syncedProviderByID(provider); ok {
-			executionParams = injectResolvedExternalProviderParams(
-				executionParams,
-				syncedProvider,
-			)
-		}
-	}
 
 	session := s.getOrCreateSession(sessionID, threadID)
 	session.mode = mode
@@ -716,51 +707,6 @@ func (s *Server) runSingleAgent(
 		workingDirectory,
 	)
 
-	if syncedProvider, ok := externalProviderFromParams(params); ok {
-		response, err := s.runSingleAgentViaExternalProvider(
-			ctx,
-			syncedProvider,
-			method,
-			params,
-			notify,
-		)
-		if err == nil {
-			result := asMap(response["result"])
-			if len(result) == 0 {
-				result = response
-			}
-			if _, exists := result["provider"]; !exists {
-				result["provider"] = provider
-			}
-			if _, exists := result["mode"]; !exists {
-				result["mode"] = "single-agent"
-			}
-			if _, exists := result["turnId"]; !exists {
-				result["turnId"] = turnID
-			}
-			if _, exists := result["effectiveWorkingDirectory"]; !exists && effectiveWorkingDirectory != "" {
-				result["effectiveWorkingDirectory"] = effectiveWorkingDirectory
-			}
-			return taskResult{response: enrichSingleAgentResultArtifacts(result, params)}
-		}
-		s.emitSessionUpdate(session, notify, turnID, map[string]any{
-			"type":    "status",
-			"event":   "completed",
-			"message": err.Error(),
-			"pending": false,
-			"error":   true,
-		})
-		return taskResult{
-			response: map[string]any{
-				"success":  false,
-				"error":    err.Error(),
-				"turnId":   turnID,
-				"mode":     "single-agent",
-				"provider": provider,
-			},
-		}
-	}
-
 	if syncedProvider, ok := s.syncedProviderByID(provider); ok {
 		response, err := s.runSingleAgentViaExternalProvider(
 			ctx,
@@ -788,13 +734,6 @@ func (s *Server) runSingleAgent(
 			}
 			return taskResult{response: enrichSingleAgentResultArtifacts(result, params)}
 		}
-		s.emitSessionUpdate(session, notify, turnID, map[string]any{
-			"type":    "status",
-			"event":   "completed",
-			"message": err.Error(),
-			"pending": false,
-			"error":   true,
-		})
 		s.emitSessionUpdate(session, notify, turnID, map[string]any{
 			"type":    "status",
 			"event":   "completed",

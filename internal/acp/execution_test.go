@@ -19,20 +19,20 @@ func TestResolveSingleAgentForwardEndpoint(t *testing.T) {
 			want: "https://acp-server.svc.plus/opencode/acp/rpc",
 		},
 		{
-			name: "rewrites bridge discovery endpoint to codex upstream",
+			name: "does not rewrite bridge endpoint placeholder for codex",
 			provider: syncedProvider{
 				ProviderID: "codex",
 				Endpoint:   "https://xworkmate-bridge.svc.plus",
 			},
-			want: "https://acp-server.svc.plus/codex/acp/rpc",
+			want: "https://xworkmate-bridge.svc.plus",
 		},
 		{
-			name: "rewrites bridge discovery endpoint to gemini upstream",
+			name: "does not rewrite bridge endpoint placeholder for gemini",
 			provider: syncedProvider{
 				ProviderID: "gemini",
 				Endpoint:   "https://xworkmate-bridge.svc.plus",
 			},
-			want: "https://acp-server.svc.plus/gemini/acp/rpc",
+			want: "https://xworkmate-bridge.svc.plus",
 		},
 	}
 
