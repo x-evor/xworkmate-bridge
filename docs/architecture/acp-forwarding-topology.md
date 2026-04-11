@@ -27,6 +27,66 @@ flowchart TD
   GWAPI --> GW["wss://openclaw.svc.plus"]
 ```
 
+## Three-Layer View
+
+This view separates what the app sees, what the bridge owns, and what the
+real upstream production targets are.
+
+```mermaid
+flowchart LR
+    subgraph L1["APP 视角"]
+        APP["xworkmate-app"]
+        APPACP["ACP 能力发现<br/>acp.capabilities"]
+        APPGW["Gateway 连接<br/>xworkmate.gateway.connect"]
+        APP --> APPACP
+        APP --> APPGW
+    end
+
+    subgraph L2["Bridge 视角"]
+        BRIDGE["xworkmate-bridge<br/>唯一上游发现真源"]
+
+        CAP["Bridge-owned ACP server list"]
+        CAP1["codex"]
+        CAP2["opencode"]
+        CAP3["gemini"]
+
+        GW["Bridge-owned gateway upstream"]
+        GW1["remote mode -> openclaw"]
+
+        BRIDGE --> CAP
+        CAP --> CAP1
+        CAP --> CAP2
+        CAP --> CAP3
+
+        BRIDGE --> GW
+        GW --> GW1
+    end
+
+    subgraph L3["上游视角"]
+        U1["https://acp-server.svc.plus/codex/acp/rpc"]
+        U2["https://acp-server.svc.plus/opencode/acp/rpc"]
+        U3["https://acp-server.svc.plus/gemini/acp/rpc"]
+        U4["wss://openclaw.svc.plus<br/>reported as openclaw.svc.plus:443"]
+    end
+
+    APPACP --> BRIDGE
+    APPGW --> BRIDGE
+
+    CAP1 --> U1
+    CAP2 --> U2
+    CAP3 --> U3
+    GW1 --> U4
+```
+
+Important distinction:
+
+- `acp.capabilities.providerCatalog` currently advertises only the ACP
+  single-agent providers: `codex`, `opencode`, and `gemini`
+- `gateway` is not part of that provider catalog; it is exposed through the
+  separate `xworkmate.gateway.*` bridge-owned runtime path
+- for remote gateway mode, the bridge rewrites the upstream target to
+  `wss://openclaw.svc.plus`
+
 ## Production Truth
 
 Bridge owns the production map:
