@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches: ['**']
   workflow_dispatch:
     inputs:
       target_host:
@@ -39,6 +39,32 @@ env:
   DEFAULT_TARGET_HOST: jp-xhttp-contabo.svc.plus
 
 jobs:
+  production_state:
+    name: Production State
+    runs-on: ubuntu-latest
+    outputs:
+      production_image: ${{ steps.production_state.outputs.production_image }}
+      production_tag: ${{ steps.production_state.outputs.production_tag }}
+      production_commit: ${{ steps.production_state.outputs.production_commit }}
+      production_version: ${{ steps.production_state.outputs.production_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Probe current production bridge
+        id: production_state
+        env:
+          BRIDGE_SERVER_URL: https://xworkmate-bridge.svc.plus
+        run: |
+          while IFS='=' read -r key value; do
+            echo "${key}=${value}" >> "$GITHUB_OUTPUT"
+          done < <(bash ./scripts/github-actions/report-production-state.sh "${BRIDGE_SERVER_URL}")
+
+      - name: Explain branch push vs production
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          echo "::notice title=Production state::Current production bridge before this run is ${{ steps.production_state.outputs.production_commit }}."
+
   prep:
     name: Prep
     runs-on: ubuntu-latest
@@ -63,7 +89,9 @@ jobs:
 
   build:
     name: Build
-    needs: prep
+    needs:
+      - production_state
+      - prep
     runs-on: ubuntu-latest
     env:
       SERVICE_REGISTRY: ghcr.io
