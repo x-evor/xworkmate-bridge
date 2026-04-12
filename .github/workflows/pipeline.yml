@@ -195,8 +195,11 @@ jobs:
 
   publish_release:
     name: Publish GitHub Release
-    needs: build
-    if: ${{ github.event_name != 'pull_request' }}
+    needs:
+      - build
+      - deploy
+      - validate
+    if: ${{ github.event_name != 'pull_request' && needs.deploy.result == 'success' && needs.validate.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
