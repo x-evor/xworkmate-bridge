@@ -92,15 +92,7 @@ jobs:
 
       - name: Resolve service image ref
         id: service_ref
-        run: |
-          set -euo pipefail
-          image_repo="${SERVICE_REGISTRY}/${SERVICE_IMAGE_REPO_OWNER}/${SERVICE_IMAGE_NAME}"
-          image_tag="${GITHUB_SHA}"
-          image_ref="${image_repo}:${image_tag}"
-
-          echo "image_repo=${image_repo}" >> "$GITHUB_OUTPUT"
-          echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
-          echo "image_ref=${image_ref}" >> "$GITHUB_OUTPUT"
+        run: bash ./scripts/github-actions/resolve-service-image-ref.sh
 
       - name: Build and optionally push service image
         uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
@@ -119,7 +111,7 @@ jobs:
 
       - name: Record artifact metadata
         id: artifact_meta
-        run: echo "artifact_name=xworkmate-bridge-service-image-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+        run: bash ./scripts/github-actions/resolve-artifact-name.sh
 
       - name: Upload image ref artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -217,13 +209,7 @@ jobs:
 
       - name: Resolve release metadata
         id: release_meta
-        run: |
-          short_sha="${GITHUB_SHA::7}"
-          tag="main-${short_sha}"
-          title="main ${short_sha}"
-
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "title=${title}" >> "$GITHUB_OUTPUT"
+        run: bash ./scripts/github-actions/resolve-release-metadata.sh
 
       - name: Publish GitHub release
         env:
