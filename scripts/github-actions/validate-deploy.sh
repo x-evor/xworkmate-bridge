@@ -117,6 +117,7 @@ probe_safe_http_endpoint() {
 ping_json="$(
   curl \
     "${curl_common[@]}" \
+    "${auth_headers[@]}" \
     "${BASE_URL}/api/ping"
 )"
 
