@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -74,23 +75,7 @@ func Serve(args []string) error {
 	server := NewServer()
 	httpServer := &http.Server{
 		Addr: strings.TrimSpace(*listen),
-		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			switch r.URL.Path {
-			case "/":
-				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-				_, _ = w.Write([]byte("xworkmate-bridge is running"))
-			case "/bridge/bootstrap/health":
-				server.HandleBridgeBootstrapHealth(w, r)
-			case "/bridge/bootstrap/consume":
-				server.HandleBridgeBootstrapConsume(w, r)
-			case "/acp/rpc":
-				server.HandleRPC(w, r)
-			case "/acp":
-				server.HandleWebSocket(w, r)
-			default:
-				http.NotFound(w, r)
-			}
-		}),
+		Handler: server.Handler(),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 5 * time.Minute,
 		IdleTimeout:  2 * time.Minute,
@@ -113,6 +98,37 @@ func NewServer() *Server {
 		providerOrder:   providerOrder,
 		authService:     service.NewStaticTokenAuthService(strings.TrimSpace(shared.EnvOrDefault("ACP_AUTH_TOKEN", ""))),
 	}
+}
+
+func (s *Server) Handler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_, _ = w.Write([]byte("xworkmate-bridge is running"))
+		case "/api/ping":
+			info := parseImageVersionInfo(os.Getenv("IMAGE"))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"status":  "ok",
+				"image":   info.ImageRef,
+				"tag":     info.Tag,
+				"commit":  info.Commit,
+				"version": info.Version,
+			})
+		case "/bridge/bootstrap/health":
+			s.HandleBridgeBootstrapHealth(w, r)
+		case "/bridge/bootstrap/consume":
+			s.HandleBridgeBootstrapConsume(w, r)
+		case "/acp/rpc":
+			s.HandleRPC(w, r)
+		case "/acp":
+			s.HandleWebSocket(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
 }
 
 func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
